@@ -657,7 +657,7 @@ func resourceAliCloudApigGatewayUpdate(d *schema.ResourceData, meta interface{})
 		query["ResourceGroupId"] = StringPointer(v.(string))
 	}
 
-	query["Service"] = StringPointer("apig")
+	query["ResourceType"] = StringPointer("gateway")
 	body = request
 	if update {
 		wait := incrementalWait(3*time.Second, 5*time.Second)
