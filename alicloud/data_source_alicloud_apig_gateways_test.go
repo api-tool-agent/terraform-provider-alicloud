@@ -110,6 +110,9 @@ func testAccCheckAlicloudApigGatewaySourceConfig(rand int, attrMap map[string]st
 variable "name" {
 	default = "tf-testAccApigGateway%d"
 }
+
+data "alicloud_resource_manager_resource_groups" "default" {}
+
 resource "alicloud_vpc" "gateway_vpc_pre3" {
   is_default = false
   cidr_block = "10.0.0.0/8"

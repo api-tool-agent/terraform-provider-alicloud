@@ -25,6 +25,7 @@ func TestAccAliCloudApigGateway_basic12899(t *testing.T) {
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudApigGatewayBasicDependence12899)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 			testAccPreCheck(t)
 		},
 		IDRefreshName: resourceId,
@@ -181,6 +182,8 @@ variable "name" {
     default = "%s"
 }
 
+data "alicloud_resource_manager_resource_groups" "default" {}
+
 resource "alicloud_vpc" "gateway_vpc_pre3" {
   is_default = false
   cidr_block = "10.0.0.0/8"
@@ -214,6 +217,7 @@ func TestAccAliCloudApigGateway_basic12900(t *testing.T) {
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudApigGatewayBasicDependence12900)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 			testAccPreCheck(t)
 		},
 		IDRefreshName: resourceId,
@@ -353,6 +357,8 @@ variable "name" {
     default = "%s"
 }
 
+data "alicloud_resource_manager_resource_groups" "default" {}
+
 resource "alicloud_vpc" "gateway_vpc_pre2" {
   is_default = false
   cidr_block = "10.0.0.0/8"
@@ -386,6 +392,7 @@ func TestAccAliCloudApigGateway_basic12901(t *testing.T) {
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudApigGatewayBasicDependence12901)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 			testAccPreCheck(t)
 		},
 		IDRefreshName: resourceId,
@@ -538,6 +545,8 @@ variable "name" {
     default = "%s"
 }
 
+data "alicloud_resource_manager_resource_groups" "default" {}
+
 resource "alicloud_vpc" "gateway_tags_vpc_pre" {
   is_default = false
   cidr_block = "10.0.0.0/8"
@@ -571,6 +580,7 @@ func TestAccAliCloudApigGateway_basic12902(t *testing.T) {
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudApigGatewayBasicDependence12902)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 			testAccPreCheck(t)
 		},
 		IDRefreshName: resourceId,
@@ -754,6 +764,8 @@ variable "name" {
     default = "%s"
 }
 
+data "alicloud_resource_manager_resource_groups" "default" {}
+
 resource "alicloud_vpc" "gateway_vpc_pre" {
   is_default = false
   cidr_block = "10.0.0.0/8"
@@ -787,6 +799,7 @@ func TestAccAliCloudApigGateway_basic11572(t *testing.T) {
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudApigGatewayBasicDependence11572)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{"cn-hangzhou"})
 			testAccPreCheck(t)
 		},
 		IDRefreshName: resourceId,
