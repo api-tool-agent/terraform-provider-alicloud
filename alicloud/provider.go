@@ -931,6 +931,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_cms_site_monitors":                                dataSourceAliCloudCloudMonitorServiceSiteMonitors(),
 			"alicloud_vpc_ipam_ipams":                                   dataSourceAliCloudVpcIpamIpams(),
 			"alicloud_das_sql_log_configs":                              dataSourceAliCloudDasSqlLogConfigs(),
+			"alicloud_apig_plugin_classes":                             dataSourceAliCloudApigPluginClasses(),
 		},
 		ResourcesMap: map[string]*schema.Resource{
 			"alicloud_cr_artifact_lifecycle_rule":                           resourceAliCloudCrArtifactLifecycleRule(),
@@ -1141,6 +1142,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_apig_environment":                                     resourceAliCloudApigEnvironment(),
 			"alicloud_apig_gateway":                                         resourceAliCloudApigGateway(),
 			"alicloud_apig_http_api":                                        resourceAliCloudApigHttpApi(),
+			"alicloud_apig_plugin_class":                                    resourceAliCloudApigPluginClass(),
 			"alicloud_mongodb_private_srv_network_address":                  resourceAliCloudMongodbPrivateSrvNetworkAddress(),
 			"alicloud_schedulerx_app_group":                                 resourceAliCloudSchedulerxAppGroup(),
 			"alicloud_schedulerx_job":                                       resourceAliCloudSchedulerxJob(),
