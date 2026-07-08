@@ -235,6 +235,11 @@ func TestAccAliCloudApigGateway_basic12900(t *testing.T) {
 							"vpc_id": "${alicloud_vpc.gateway_vpc_pre2.id}",
 						},
 					},
+					"vswitch": []map[string]interface{}{
+						{
+							"vswitch_id": "${alicloud_vswitch.gateway_vswitch_pre2.id}",
+						},
+					},
 					"gateway_edition": "Serverless",
 					"gateway_type":    "AI",
 					"payment_type":    "Subscription",
