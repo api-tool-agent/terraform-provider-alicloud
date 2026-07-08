@@ -62,6 +62,7 @@ func resourceAliCloudApigGateway() *schema.Resource {
 			"gateway_edition": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Computed: true,
 				ForceNew: true,
 			},
 			"gateway_name": {

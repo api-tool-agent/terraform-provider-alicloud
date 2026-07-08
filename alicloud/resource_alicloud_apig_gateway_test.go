@@ -47,12 +47,6 @@ func TestAccAliCloudApigGateway_basic12899(t *testing.T) {
 					},
 					"gateway_edition": "Professional",
 					"gateway_type":    "API",
-					"zones": []map[string]interface{}{
-						{
-							"zone_id":    "cn-hangzhou-i",
-							"vswitch_id": "${alicloud_vswitch.gateway_vswitch_pre3.id}",
-						},
-					},
 					"vswitch": []map[string]interface{}{
 						{
 							"vswitch_id": "${alicloud_vswitch.gateway_vswitch_pre3.id}",
@@ -246,12 +240,6 @@ func TestAccAliCloudApigGateway_basic12900(t *testing.T) {
 					"payment_type":    "Subscription",
 					"gateway_name":    name,
 					"spec":            "apigw.small.x1",
-					"zones": []map[string]interface{}{
-						{
-							"zone_id":    "cn-hangzhou-i",
-							"vswitch_id": "${alicloud_vswitch.gateway_vswitch_pre2.id}",
-						},
-					},
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -426,12 +414,6 @@ func TestAccAliCloudApigGateway_basic12901(t *testing.T) {
 					"payment_type":    "PayAsYouGo",
 					"gateway_name":    name,
 					"spec":            "apigw.small.x1",
-					"zones": []map[string]interface{}{
-						{
-							"zone_id":    "cn-hangzhou-i",
-							"vswitch_id": "${alicloud_vswitch.gateway_tags_vswitch_pre.id}",
-						},
-					},
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
@@ -602,12 +584,6 @@ func TestAccAliCloudApigGateway_basic12902(t *testing.T) {
 					},
 					"gateway_edition": "Professional",
 					"gateway_type":    "API",
-					"zones": []map[string]interface{}{
-						{
-							"zone_id":    "cn-hangzhou-i",
-							"vswitch_id": "${alicloud_vswitch.gateway_vswitch_pre.id}",
-						},
-					},
 					"vswitch": []map[string]interface{}{
 						{
 							"vswitch_id": "${alicloud_vswitch.gateway_vswitch_pre.id}",

@@ -139,10 +139,6 @@ resource "alicloud_apig_gateway" "default" {
   }
   gateway_edition = "Professional"
   gateway_type    = "API"
-  zones {
-    zone_id    = "cn-hangzhou-i"
-    vswitch_id = alicloud_vswitch.gateway_vswitch_pre3.id
-  }
   vswitch {
     vswitch_id = alicloud_vswitch.gateway_vswitch_pre3.id
   }
