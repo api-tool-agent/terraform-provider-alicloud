@@ -249,7 +249,6 @@ func (s *ApigServiceV2) SetResourceTags(d *schema.ResourceData, resourceType str
 		client := s.client
 		var request map[string]interface{}
 		var response map[string]interface{}
-		header := make(map[string]*string)
 		query := make(map[string]*string)
 		body := make(map[string]interface{})
 

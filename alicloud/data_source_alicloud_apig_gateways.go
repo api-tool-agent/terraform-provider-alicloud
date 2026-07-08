@@ -381,7 +381,8 @@ func dataSourceAliCloudApigGatewayRead(d *schema.ResourceData, meta interface{})
 
 	tagMap := make([]interface{}, 0)
 	tagMap = append(tagMap, tagDataList)
-	query["tag"] = tagMap
+	tagString, _ := convertArrayObjectToJsonString(tagMap)
+	query["tag"] = StringPointer(tagString)
 
 	runtime := util.RuntimeOptions{}
 	runtime.SetAutoretry(true)
