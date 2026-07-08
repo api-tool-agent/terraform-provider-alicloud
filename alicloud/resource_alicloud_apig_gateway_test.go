@@ -72,7 +72,7 @@ func TestAccAliCloudApigGateway_basic12899(t *testing.T) {
 						"resource_group_id": CHECKSET,
 						"gateway_edition":   "Professional",
 						"gateway_type":      "API",
-						"zones.#":           "1",
+						"zones.#":           CHECKSET,
 						"payment_type":      "PayAsYouGo",
 						"gateway_name":      name,
 						"spec":              "apigw.small.x1",
@@ -233,7 +233,7 @@ func TestAccAliCloudApigGateway_basic12900(t *testing.T) {
 					},
 					"zone_config": []map[string]interface{}{
 						{
-							"select_option": "Manual",
+							"select_option": "Auto",
 						},
 					},
 					"vpc": []map[string]interface{}{
@@ -260,7 +260,7 @@ func TestAccAliCloudApigGateway_basic12900(t *testing.T) {
 						"payment_type":    "Subscription",
 						"gateway_name":    name,
 						"spec":            "apigw.small.x1",
-						"zones.#":         "1",
+						"zones.#":         CHECKSET,
 					}),
 				),
 			},
@@ -440,7 +440,7 @@ func TestAccAliCloudApigGateway_basic12901(t *testing.T) {
 						"payment_type":    "PayAsYouGo",
 						"gateway_name":    name,
 						"spec":            "apigw.small.x1",
-						"zones.#":         "1",
+						"zones.#":         CHECKSET,
 					}),
 				),
 			},
@@ -636,7 +636,7 @@ func TestAccAliCloudApigGateway_basic12902(t *testing.T) {
 						"resource_group_id": CHECKSET,
 						"gateway_edition":   "Professional",
 						"gateway_type":      "API",
-						"zones.#":           "1",
+						"zones.#":           CHECKSET,
 						"payment_type":      "PayAsYouGo",
 						"gateway_name":      name,
 						"spec":              "apigw.small.x1",
@@ -845,12 +845,10 @@ func TestAccAliCloudApigGateway_basic11572(t *testing.T) {
 						{
 							"vswitch_id": "${alicloud_vswitch.defaultVSwitch.id}",
 							"zone_id":    "${alicloud_vswitch.defaultVSwitch.zone_id}",
-							"name":       "杭州 可用区J",
 						},
 						{
 							"vswitch_id": "${alicloud_vswitch.defaultAskkJp.id}",
 							"zone_id":    "${alicloud_vswitch.defaultAskkJp.zone_id}",
-							"name":       "杭州 可用区K",
 						},
 					},
 				}),
