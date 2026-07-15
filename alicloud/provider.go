@@ -171,8 +171,6 @@ func Provider() terraform.ResourceProvider {
 			},
 		},
 		DataSourcesMap: map[string]*schema.Resource{
-			"alicloud_apig_gateways":                              dataSourceAliCloudApigGateways(),
-			"alicloud_apig_plugins":                               dataSourceAliCloudApigPlugins(),
 			"alicloud_express_connect_router_vpc_associations":    dataSourceAliCloudExpressConnectRouterVpcAssociations(),
 			"alicloud_express_connect_router_tr_associations":     dataSourceAliCloudExpressConnectRouterTrAssociations(),
 			"alicloud_express_connect_router_vbr_child_instances": dataSourceAliCloudExpressConnectRouterVbrChildInstances(),
@@ -682,6 +680,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_ecd_users":                                        dataSourceAlicloudEcdUsers(),
 			"alicloud_vpc_traffic_mirror_sessions":                      dataSourceAlicloudVpcTrafficMirrorSessions(),
 			"alicloud_gpdb_accounts":                                    dataSourceAlicloudGpdbAccounts(),
+			"alicloud_gpdb_api_keys":                                    dataSourceAliCloudGpdbApiKeys(),
 			"alicloud_vpc_ipv6_gateways":                                dataSourceAlicloudVpcIpv6Gateways(),
 			"alicloud_vpc_ipv6_egress_rules":                            dataSourceAlicloudVpcIpv6EgressRules(),
 			"alicloud_vpc_ipv6_addresses":                               dataSourceAlicloudVpcIpv6Addresses(),
@@ -938,7 +937,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_apig_plugin_classes":                              dataSourceAliCloudApigPluginClasses(),
 		},
 		ResourcesMap: map[string]*schema.Resource{
-			"alicloud_apig_plugin":                                          resourceAliCloudApigPlugin(),
+			"alicloud_gpdb_api_key":                                         resourceAliCloudGpdbApiKey(),
 			"alicloud_apig_plugin_class":                                    resourceAliCloudApigPluginClass(),
 			"alicloud_cr_artifact_lifecycle_rule":                           resourceAliCloudCrArtifactLifecycleRule(),
 			"alicloud_das_sql_log_config":                                   resourceAliCloudDasSqlLogConfig(),
