@@ -1394,6 +1394,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_nas_access_group":                                     resourceAliCloudNasAccessGroup(),
 			"alicloud_nas_access_rule":                                      resourceAliCloudNasAccessRule(),
 			"alicloud_nas_smb_acl_attachment":                               resourceAlicloudNasSmbAclAttachment(),
+			"alicloud_nas_log_analysis":                                     resourceAliCloudNasLogAnalysis(),
 			"alicloud_tag_meta_tag":                                         resourceAlicloudTagMetaTag(),
 			// "alicloud_subnet" aims to match aws usage habit.
 			"alicloud_subnet":                        resourceAliCloudVpcVswitch(),
