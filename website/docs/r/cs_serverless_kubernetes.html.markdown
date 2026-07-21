@@ -122,6 +122,10 @@ The following arguments are supported:
     - ack.pro.small: Professional serverless clusters.
 * `custom_san` - (Optional, Available since v1.229.1) Customize the certificate SAN, multiple IP or domain names are separated by English commas (,).
 -> **NOTE:** Make sure you have specified all certificate SANs before updating. Updating this field will lead APIServer to restart.
+* `encryption_provider_key` - (Optional) The ID of the Key Management Service (KMS) key that is used to encrypt Kubernetes Secrets.
+  -> **Note:** To enable encryption, you must specify both `encryption_provider_key` and `disable_encryption = false`. When `disable_encryption` is set to `true`, changes to `encryption_provider_key` will be ignored.
+* `disable_encryption` - (Optional, Computed) Whether to disable encryption for Kubernetes Secrets. Default value is `false`. Set to `true` to disable encryption.
+  -> **Note:** When enabling encryption, you must explicitly set `disable_encryption = false` along with `encryption_provider_key`. When disabling encryption, you only need to set `disable_encryption = true`, and the `encryption_provider_key` will be ignored.
 * `maintenance_window` - (Optional, Available since v1.232.0) The cluster maintenance window，effective only in the professional managed cluster. Managed node pool will use it. See [`maintenance_window`](#maintenance_window) below.
 * `operation_policy` - (Optional, Available since v1.232.0) The cluster automatic operation policy. See [`operation_policy`](#operation_policy) below.
 

@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/denverdino/aliyungo/cs"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func getTimezone(region string) string {
@@ -446,6 +448,35 @@ resource "alicloud_security_group" "default" {
   name   = var.name
   vpc_id = alicloud_vpc.default.id
 }
+
+data "alicloud_kms_keys" "default" {
+  filters = "[{\"Key\":\"KeyState\",\"Values\":[\"Enabled\"]},{\"Key\":\"KeySpec\",\"Values\":[\"Aliyun_AES_256\"]},{\"Key\":\"KeyUsage\",\"Values\":[\"ENCRYPT/DECRYPT\"]},{\"Key\":\"CreatorType\",\"Values\":[\"User\"]}]"
+}
+`, name)
+}
+
+func resourceCSServerlessKubernetesConfigDependenceEncryption(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+  default = "%s"
+}
+
+data "alicloud_enhanced_nat_available_zones" "enhanced" {
+}
+
+data "alicloud_resource_manager_resource_groups" "default" {
+  status = "OK"
+}
+
+data "alicloud_cs_kubernetes_version" "version-126" {
+  cluster_type       = "Kubernetes"
+  kubernetes_version = "1.26"
+  profile            = "Serverless"
+}
+
+data "alicloud_kms_keys" "default" {
+  filters = "[{\"Key\":\"KeyState\",\"Values\":[\"Enabled\"]},{\"Key\":\"KeySpec\",\"Values\":[\"Aliyun_AES_256\"]},{\"Key\":\"KeyUsage\",\"Values\":[\"ENCRYPT/DECRYPT\"]},{\"Key\":\"CreatorType\",\"Values\":[\"User\"]}]"
+}
 `, name)
 }
 
@@ -468,4 +499,138 @@ var csServerlessKubernetesBasicMap = map[string]string{
 	"new_nat_gateway":                "true",
 	"deletion_protection":            "false",
 	"endpoint_public_access_enabled": "true",
+}
+
+func TestUnitResourceAlicloudCSServerlessKubernetes_encryptionSchema(t *testing.T) {
+	r := resourceAlicloudCSServerlessKubernetes()
+	s := r.Schema
+
+	epk, ok := s["encryption_provider_key"]
+	if !ok {
+		t.Fatal("encryption_provider_key not found in schema")
+	}
+	if epk.Type != schema.TypeString {
+		t.Errorf("encryption_provider_key type expected TypeString, got %v", epk.Type)
+	}
+	if !epk.Optional {
+		t.Error("encryption_provider_key should be Optional")
+	}
+	if epk.DiffSuppressFunc == nil {
+		t.Error("encryption_provider_key should have DiffSuppressFunc set")
+	}
+
+	de, ok := s["disable_encryption"]
+	if !ok {
+		t.Fatal("disable_encryption not found in schema")
+	}
+	if de.Type != schema.TypeBool {
+		t.Errorf("disable_encryption type expected TypeBool, got %v", de.Type)
+	}
+	if !de.Optional {
+		t.Error("disable_encryption should be Optional")
+	}
+	if !de.Computed {
+		t.Error("disable_encryption should be Computed")
+	}
+}
+
+func TestUnitKmsEncryptionDiffSuppressFunc(t *testing.T) {
+	resourceSchema := map[string]*schema.Schema{
+		"disable_encryption": {Type: schema.TypeBool},
+	}
+
+	d := schema.TestResourceDataRaw(t, resourceSchema, map[string]interface{}{
+		"disable_encryption": true,
+	})
+	if !kmsEncryptionDiffSuppressFunc("encryption_provider_key", "old-key", "new-key", d) {
+		t.Error("expected diff to be suppressed when disable_encryption is true")
+	}
+
+	d = schema.TestResourceDataRaw(t, resourceSchema, map[string]interface{}{
+		"disable_encryption": false,
+	})
+	if kmsEncryptionDiffSuppressFunc("encryption_provider_key", "old-key", "new-key", d) {
+		t.Error("expected diff NOT to be suppressed when disable_encryption is false")
+	}
+}
+
+func TestAccAliCloudCSServerlessKubernetes_kmsEncryption(t *testing.T) {
+	var v *cs.ServerlessClusterResponse
+
+	resourceId := "alicloud_cs_serverless_kubernetes.default"
+	ra := resourceAttrInit(resourceId, csServerlessKubernetesBasicMap)
+
+	serviceFunc := func() interface{} {
+		return &CsService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}
+	rc := resourceCheckInit(resourceId, &v, serviceFunc)
+
+	rac := resourceAttrCheckInit(rc, ra)
+
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testaccserverlesskubernetes-encryption-%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceCSServerlessKubernetesConfigDependenceEncryption)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccPreCheckWithRegions(t, true, connectivity.ServerlessKubernetesSupportedRegions)
+		},
+		IDRefreshName: resourceId,
+		Providers:     testAccProviders,
+		CheckDestroy:  rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"name":                           name,
+					"version":                        "${data.alicloud_cs_kubernetes_version.version-126.metadata.0.version}",
+					"zone_id":                        "${data.alicloud_enhanced_nat_available_zones.enhanced.zones.0.zone_id}",
+					"new_nat_gateway":                "true",
+					"deletion_protection":            "false",
+					"endpoint_public_access_enabled": "true",
+					"cluster_spec":                   "ack.pro.small",
+					"service_cidr":                   "10.0.1.0/24",
+					"time_zone":                      getTimezone(os.Getenv("ALICLOUD_REGION")),
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"name":                name,
+						"deletion_protection": "false",
+						"cluster_spec":        "ack.pro.small",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"encryption_provider_key": "${data.alicloud_kms_keys.default.keys[0].key_id}",
+					"disable_encryption":      "false",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"encryption_provider_key": CHECKSET,
+						"disable_encryption":      "false",
+					}),
+				),
+			},
+			{
+				PreConfig: func() { time.Sleep(5 * time.Minute) },
+				Config: testAccConfig(map[string]interface{}{
+					"encryption_provider_key": "",
+					"disable_encryption":      "true",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"disable_encryption": "true",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"load_balancer_spec", "new_nat_gateway", "private_zone", "sls_project_name", "service_discovery_types", "logging_type", "time_zone", "addons", "cluster_ca_cert", "client_key", "client_cert", "encryption_provider_key", "zone_id"},
+			},
+		},
+	})
 }
