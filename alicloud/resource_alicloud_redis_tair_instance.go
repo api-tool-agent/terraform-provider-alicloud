@@ -50,6 +50,13 @@ func resourceAliCloudRedisTairInstance() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
+			"config": {
+				Type:         schema.TypeMap,
+				Optional:     true,
+				Computed:     true,
+				ValidateFunc: validateRedisConfig,
+				Elem:         &schema.Schema{Type: schema.TypeString},
+			},
 			"connection_domain": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -100,6 +107,16 @@ func resourceAliCloudRedisTairInstance() *schema.Resource {
 			},
 			"intranet_bandwidth": {
 				Type:     schema.TypeInt,
+				Optional: true,
+				Computed: true,
+			},
+			"maintain_end_time": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+			},
+			"maintain_start_time": {
+				Type:     schema.TypeString,
 				Optional: true,
 				Computed: true,
 			},
@@ -204,6 +221,16 @@ func resourceAliCloudRedisTairInstance() *schema.Resource {
 			"security_group_id": {
 				Type:     schema.TypeString,
 				Optional: true,
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					if old != "" && new != "" && old != new {
+						oldParts := strings.Split(old, ",")
+						sort.Strings(oldParts)
+						newParts := strings.Split(new, ",")
+						sort.Strings(newParts)
+						return reflect.DeepEqual(newParts, oldParts)
+					}
+					return false
+				},
 			},
 			"security_ip_group_name": {
 				Type:     schema.TypeString,
@@ -434,6 +461,14 @@ func resourceAliCloudRedisTairInstanceRead(d *schema.ResourceData, meta interfac
 		return WrapError(err)
 	}
 
+	// IsSupportTDE reflects whether the instance actually supports Transparent Data Encryption.
+	// It must be captured from the DescribeInstanceAttribute response before objectRaw gets
+	// reassigned by the subsequent describe calls below.
+	isSupportTDE := false
+	if v, ok := objectRaw["IsSupportTDE"].(bool); ok {
+		isSupportTDE = v
+	}
+
 	if objectRaw["ArchitectureType"] != nil {
 		d.Set("architecture_type", objectRaw["ArchitectureType"])
 	}
@@ -451,6 +486,12 @@ func resourceAliCloudRedisTairInstanceRead(d *schema.ResourceData, meta interfac
 	}
 	if objectRaw["InstanceType"] != nil {
 		d.Set("instance_type", objectRaw["InstanceType"])
+	}
+	if objectRaw["MaintainEndTime"] != nil {
+		d.Set("maintain_end_time", objectRaw["MaintainEndTime"])
+	}
+	if objectRaw["MaintainStartTime"] != nil {
+		d.Set("maintain_start_time", objectRaw["MaintainStartTime"])
 	}
 	if objectRaw["Connections"] != nil {
 		d.Set("max_connections", objectRaw["Connections"])
@@ -534,6 +575,26 @@ func resourceAliCloudRedisTairInstanceRead(d *schema.ResourceData, meta interfac
 		d.Set("param_sentinel_compat_enable", objectRaw["ParamSentinelCompatEnable"])
 	}
 
+	gotConfigs := make(map[string]interface{})
+	if v, ok := d.GetOk("config"); ok && v != nil {
+		gotConfigs = v.(map[string]interface{})
+	}
+	if objectRaw["Config"] != nil && fmt.Sprint(objectRaw["Config"]) != "" {
+		configMap := make(map[string]string)
+		config, err := convertJsonStringToMap(fmt.Sprint(objectRaw["Config"]))
+		if err != nil {
+			return WrapError(err)
+		}
+		for k, v := range config {
+			// OpenAPI returns all configs even if the user did not specify them. Filter via gotConfigs.
+			if _, ok := gotConfigs[k]; !ok && len(gotConfigs) > 0 {
+				continue
+			}
+			configMap[k] = fmt.Sprint(v)
+		}
+		d.Set("config", configMap)
+	}
+
 	var securityIpGroupName string
 	if v, ok := d.GetOk("security_ip_group_name"); ok {
 		securityIpGroupName = v.(string)
@@ -562,9 +623,11 @@ func resourceAliCloudRedisTairInstanceRead(d *schema.ResourceData, meta interfac
 		d.Set("security_group_id", objectRaw["SecurityGroupId"])
 	}
 
-	checkValue00 := d.Get("instance_type")
-	checkValue01 := d.Get("engine_version")
-	if (checkValue00 == "tair_rdb") && (InArray(fmt.Sprint(checkValue01), []string{"6.0", "7.0"})) {
+	// Only query the TDE status when the instance actually supports it. Gating on the
+	// runtime IsSupportTDE flag (instead of a static instance_type/engine_version match)
+	// avoids the InstanceType.NotSupport 400 error that DescribeInstanceTDEStatus raises
+	// for instances that do not support TDE, which otherwise bubbles up as a fatal read error.
+	if isSupportTDE {
 		objectRaw, err = redisServiceV2.DescribeTairInstanceDescribeInstanceTDEStatus(d.Id())
 		if err != nil && !NotFoundError(err) {
 			return WrapError(err)
@@ -1031,6 +1094,15 @@ func resourceAliCloudRedisTairInstanceUpdate(d *schema.ResourceData, meta interf
 		request["ParamNoLooseSentinelPasswordFreeCommands"] = d.Get("param_no_loose_sentinel_password_free_commands")
 	}
 
+	if d.HasChange("config") {
+		update = true
+		respJson, err := convertMaptoJsonString(d.Get("config").(map[string]interface{}))
+		if err != nil {
+			return WrapErrorf(err, DefaultErrorMsg, "alicloud_redis_tair_instance", action, AlibabaCloudSdkGoERROR)
+		}
+		request["Config"] = respJson
+	}
+
 	if update {
 		runtime := util.RuntimeOptions{}
 		runtime.SetAutoretry(true)
@@ -1173,6 +1245,42 @@ func resourceAliCloudRedisTairInstanceUpdate(d *schema.ResourceData, meta interf
 				return WrapErrorf(err, IdMsg, d.Id())
 			}
 
+		}
+	}
+	update = false
+	action = "ModifyInstanceMaintainTime"
+	request = make(map[string]interface{})
+	query = make(map[string]interface{})
+	request["InstanceId"] = d.Id()
+	request["RegionId"] = client.RegionId
+	if d.HasChange("maintain_end_time") {
+		update = true
+	}
+	if v, ok := d.GetOk("maintain_end_time"); ok {
+		request["MaintainEndTime"] = v
+	}
+	if d.HasChange("maintain_start_time") {
+		update = true
+	}
+	if v, ok := d.GetOk("maintain_start_time"); ok {
+		request["MaintainStartTime"] = v
+	}
+	if update {
+		wait := incrementalWait(3*time.Second, 5*time.Second)
+		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
+			response, err = client.RpcPost("R-kvstore", "2015-01-01", action, query, request, true)
+			if err != nil {
+				if NeedRetry(err) {
+					wait()
+					return resource.RetryableError(err)
+				}
+				return resource.NonRetryableError(err)
+			}
+			return nil
+		})
+		addDebug(action, response, request)
+		if err != nil {
+			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
 		}
 	}
 	if d.HasChange("tags") {

@@ -34,41 +34,50 @@ func (s *RamServiceV2) DescribeRamUserGroupAttachment(id string) (object map[str
 
 	action := "ListUsersForGroup"
 
-	wait := incrementalWait(3*time.Second, 5*time.Second)
-	err = resource.Retry(1*time.Minute, func() *resource.RetryError {
-		response, err = client.RpcPost("Ram", "2015-05-01", action, query, request, true)
+	for {
+		wait := incrementalWait(3*time.Second, 5*time.Second)
+		err = resource.Retry(1*time.Minute, func() *resource.RetryError {
+			response, err = client.RpcPost("Ram", "2015-05-01", action, query, request, true)
 
-		if err != nil {
-			if NeedRetry(err) {
-				wait()
-				return resource.RetryableError(err)
+			if err != nil {
+				if NeedRetry(err) {
+					wait()
+					return resource.RetryableError(err)
+				}
+				return resource.NonRetryableError(err)
 			}
-			return resource.NonRetryableError(err)
+			return nil
+		})
+		addDebug(action, response, request)
+		if err != nil {
+			return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 		}
-		return nil
-	})
-	addDebug(action, response, request)
-	if err != nil {
-		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
-	}
 
-	v, err := jsonpath.Get("$.Users.User[*]", response)
-	if err != nil {
-		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.Users.User[*]", response)
-	}
-
-	if len(v.([]interface{})) == 0 {
-		return object, WrapErrorf(NotFoundErr("UserGroupAttachment", id), NotFoundMsg, response)
-	}
-
-	result, _ := v.([]interface{})
-	for _, v := range result {
-		item := v.(map[string]interface{})
-		if fmt.Sprint(item["UserName"]) != parts[1] {
-			continue
+		v, err := jsonpath.Get("$.Users.User[*]", response)
+		if err != nil {
+			return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.Users.User[*]", response)
 		}
-		return item, nil
+
+		result, _ := v.([]interface{})
+		for _, v := range result {
+			item := v.(map[string]interface{})
+			if fmt.Sprint(item["UserName"]) != parts[1] {
+				continue
+			}
+			return item, nil
+		}
+
+		if isTruncated, _ := response["IsTruncated"].(bool); !isTruncated {
+			break
+		}
+
+		marker, _ := response["Marker"].(string)
+		if marker == "" || marker == fmt.Sprint(request["Marker"]) {
+			break
+		}
+		request["Marker"] = marker
 	}
+
 	return object, WrapErrorf(NotFoundErr("UserGroupAttachment", id), NotFoundMsg, response)
 }
 
@@ -1327,3 +1336,60 @@ func (s *RamServiceV2) ParseRolePolicyDocument(policyDocument string) (RolePolic
 }
 
 // DescribeRamRole >>> Encapsulated.
+
+// DescribeRamAccessKeyPolicy <<< Encapsulated get interface for Ram AccessKeyPolicy.
+
+func (s *RamServiceV2) DescribeRamAccessKeyPolicy(id string) (object map[string]interface{}, err error) {
+	client := s.client
+	var request map[string]interface{}
+	var response map[string]interface{}
+	var query map[string]interface{}
+	userPrincipalName, userAccessKeyId := parseRamAccessKeyPolicyId(id)
+	request = make(map[string]interface{})
+	query = make(map[string]interface{})
+	request["UserAccessKeyId"] = userAccessKeyId
+	if userPrincipalName != "" {
+		request["UserPrincipalName"] = userPrincipalName
+	}
+
+	action := "GetAccessKeyPolicy"
+
+	wait := incrementalWait(3*time.Second, 5*time.Second)
+	err = resource.Retry(1*time.Minute, func() *resource.RetryError {
+		response, err = client.RpcPost("Ims", "2019-08-15", action, query, request, true)
+
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return resource.RetryableError(err)
+			}
+			return resource.NonRetryableError(err)
+		}
+		return nil
+	})
+	addDebug(action, response, request)
+	if err != nil {
+		if IsExpectedErrors(err, []string{"EntityNotExist.AccessKeyPolicy"}) {
+			return object, WrapErrorf(NotFoundErr("RamAccessKeyPolicy", id), NotFoundMsg, response)
+		}
+		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
+
+	// The network access restriction policy is an attribute of the access key
+	// rather than an independent object. When no policy has ever been set the
+	// API returns an empty object "{}"; after a reset/Delete it returns a
+	// disabled policy with no statements (e.g. {"Version":1,"Status":"Inactive",
+	// "Statements":[]}). Both represent the "no policy" baseline and are treated
+	// as "the resource does not exist".
+	policyRaw, ok := response["AccessKeyPolicy"]
+	if !ok || policyRaw == nil {
+		return object, WrapErrorf(NotFoundErr("RamAccessKeyPolicy", id), NotFoundMsg, response)
+	}
+	if isEmptyAccessKeyPolicy(fmt.Sprint(policyRaw)) {
+		return object, WrapErrorf(NotFoundErr("RamAccessKeyPolicy", id), NotFoundMsg, response)
+	}
+
+	return response, nil
+}
+
+// DescribeRamAccessKeyPolicy >>> Encapsulated.

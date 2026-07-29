@@ -3141,9 +3141,9 @@ func (s *EsaServiceV2) DescribeEsaKv(id string) (object map[string]interface{}, 
 	var request map[string]interface{}
 	var response map[string]interface{}
 	var query map[string]interface{}
-	parts := strings.Split(id, ":")
+	parts := strings.SplitN(id, ":", 2)
 	if len(parts) != 2 {
-		err = WrapError(fmt.Errorf("invalid Resource Id %s. Expected parts' length %d, got %d", id, 2, len(parts)))
+		return object, WrapError(fmt.Errorf("invalid Resource Id %s. Expected parts' length %d, got %d", id, 2, len(parts)))
 	}
 	request = make(map[string]interface{})
 	query = make(map[string]interface{})
@@ -3366,7 +3366,7 @@ func (s *EsaServiceV2) DescribeEsaRoutineRoute(id string) (object map[string]int
 		response, err = client.RpcPost("ESA", "2024-09-10", action, query, request, true)
 
 		if err != nil {
-			if NeedRetry(err) {
+			if IsExpectedErrors(err, []string{"Site.ServiceBusy", "TooManyRequests", "LockFailed"}) || NeedRetry(err) {
 				wait()
 				return resource.RetryableError(err)
 			}
@@ -4308,6 +4308,9 @@ func (s *EsaServiceV2) DescribeEsaTransportLayerApplication(id string) (object m
 	})
 	addDebug(action, response, request)
 	if err != nil {
+		if IsExpectedErrors(err, []string{"TransportLayerApplicationNotExist"}) {
+			return object, WrapErrorf(NotFoundErr("TransportLayerApplication", id), NotFoundMsg, response)
+		}
 		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 	}
 
