@@ -809,6 +809,9 @@ func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
 		return d
 	}
 
+	origDescribe := dtsSyncJobDescribe
+	origRpcPost := dtsSyncJobRpcPost
+	origQueryChangedParameters := dtsSyncJobQueryChangedParameters
 	mockSeams := func(dtsJobClass string) {
 		dtsSyncJobDescribe = func(_ *connectivity.AliyunClient, _ string) (map[string]interface{}, error) {
 			return jobDetailResponse(dtsJobClass), nil
@@ -818,17 +821,9 @@ func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
 		}
 	}
 	restoreSeams := func() {
-		dtsSyncJobDescribe = func(client *connectivity.AliyunClient, id string) (map[string]interface{}, error) {
-			dtsService := DtsService{client}
-			return dtsService.DescribeDtsSynchronizationJob(id)
-		}
-		dtsSyncJobRpcPost = func(client *connectivity.AliyunClient, apiProductCode string, apiVersion string, apiName string, query map[string]interface{}, body map[string]interface{}, autoRetry bool) (map[string]interface{}, error) {
-			return client.RpcPost(apiProductCode, apiVersion, apiName, query, body, autoRetry)
-		}
-		dtsSyncJobQueryChangedParameters = func(client *connectivity.AliyunClient, id string) (string, error) {
-			dtsService := DtsService{client}
-			return dtsService.QueryChangedJobParameters(id)
-		}
+		dtsSyncJobDescribe = origDescribe
+		dtsSyncJobRpcPost = origRpcPost
+		dtsSyncJobQueryChangedParameters = origQueryChangedParameters
 	}
 
 	t.Run("update dispatches transfer when class differs", func(t *testing.T) {
@@ -929,5 +924,16 @@ func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
 		err = resourceAlicloudDtsSynchronizationJobRead(d, rawClient)
 		assert.Nil(t, err)
 		assert.Equal(t, "large", d.Get("instance_class"))
+	})
+
+	t.Run("default seams delegate to the real client", func(t *testing.T) {
+		restoreSeams()
+		client := rawClient.(*connectivity.AliyunClient)
+		_, err := dtsSyncJobDescribe(client, "unit-probe-job-id")
+		assert.NotNil(t, err)
+		_, err = dtsSyncJobQueryChangedParameters(client, "unit-probe-job-id")
+		assert.NotNil(t, err)
+		_, err = dtsSyncJobRpcPost(client, "Dts", "2020-01-01", "TransferInstanceClass", nil, map[string]interface{}{"DtsJobId": "unit-probe-job-id"}, false)
+		assert.NotNil(t, err)
 	})
 }
