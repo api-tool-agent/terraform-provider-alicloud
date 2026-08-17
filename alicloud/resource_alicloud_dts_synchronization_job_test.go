@@ -830,7 +830,9 @@ func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
 		transferCalled := false
 		dtsSyncJobDescribe = func(_ *connectivity.AliyunClient, _ string) (map[string]interface{}, error) {
 			if transferCalled {
-				return jobDetailResponse("large"), nil
+				// after the transfer the server reports a class differing from the config,
+				// proving the trailing read writes back the server value
+				return jobDetailResponse("xlarge"), nil
 			}
 			return jobDetailResponse("small"), nil
 		}
@@ -852,7 +854,7 @@ func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
 		assert.Equal(t, 1, len(transferRequests))
 		assert.Equal(t, "large", transferRequests[0]["InstanceClass"])
 		assert.Equal(t, "UPGRADE", transferRequests[0]["OrderType"])
-		assert.Equal(t, "large", d.Get("instance_class"))
+		assert.Equal(t, "xlarge", d.Get("instance_class"))
 	})
 
 	t.Run("update skips transfer when config equals actual", func(t *testing.T) {
@@ -896,7 +898,6 @@ func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
 	})
 
 	t.Run("update returns error when describe fails", func(t *testing.T) {
-		restoreSeams()
 		defer restoreSeams()
 		dtsSyncJobDescribe = func(_ *connectivity.AliyunClient, _ string) (map[string]interface{}, error) {
 			return nil, fmt.Errorf("mock describe failure")
@@ -926,14 +927,15 @@ func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
 		assert.Equal(t, "large", d.Get("instance_class"))
 	})
 
+	// The other subtests swap the seams, so the default delegation bodies are only
+	// executed here. Both probes are read-only lookups of a nonexistent job id and
+	// must fail without side effects.
 	t.Run("default seams delegate to the real client", func(t *testing.T) {
 		restoreSeams()
 		client := rawClient.(*connectivity.AliyunClient)
 		_, err := dtsSyncJobDescribe(client, "unit-probe-job-id")
 		assert.NotNil(t, err)
 		_, err = dtsSyncJobQueryChangedParameters(client, "unit-probe-job-id")
-		assert.NotNil(t, err)
-		_, err = dtsSyncJobRpcPost(client, "Dts", "2020-01-01", "TransferInstanceClass", nil, map[string]interface{}{"DtsJobId": "unit-probe-job-id"}, false)
 		assert.NotNil(t, err)
 	})
 }

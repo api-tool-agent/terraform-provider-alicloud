@@ -997,15 +997,17 @@ func dtsSyncJobInstanceClassValue(object map[string]interface{}) interface{} {
 // actual one, and a downgrade without permission fails with 403, so the call must be skipped
 // when the configured class is empty or identical to the actual class.
 func dtsSyncJobInstanceClassTransferTarget(configClass, actualClass interface{}) string {
-	config := fmt.Sprint(configClass)
-	if config == "" || config == "<nil>" {
+	if configClass == nil {
 		return ""
 	}
-	actual := fmt.Sprint(actualClass)
-	if actual == "<nil>" {
-		actual = ""
+	config := fmt.Sprint(configClass)
+	if config == "" {
+		return ""
 	}
-	if config == actual {
+	if actualClass == nil {
+		return config
+	}
+	if config == fmt.Sprint(actualClass) {
 		return ""
 	}
 	return config
