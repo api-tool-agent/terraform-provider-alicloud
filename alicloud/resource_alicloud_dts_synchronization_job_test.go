@@ -8,6 +8,9 @@ import (
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/terraform"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAccAliCloudDTSSynchronizationJob_basic0(t *testing.T) {
@@ -726,4 +729,205 @@ func AliCloudDTSSynchronizationJobBasicDependence1(name string) string {
   		sync_architecture                = "oneway"
 	}
 `, name)
+}
+
+func TestUnitAlicloudDTSSynchronizationJobInstanceClassTransferTarget(t *testing.T) {
+	cases := []struct {
+		name         string
+		configClass  interface{}
+		actualClass  interface{}
+		expectTarget string
+	}{
+		{"empty config skips", "", "small", ""},
+		{"nil config skips", nil, "small", ""},
+		{"equal class skips", "small", "small", ""},
+		{"upgrade dispatches", "large", "small", "large"},
+		{"downgrade dispatches", "small", "4xlarge", "small"},
+		{"unknown actual dispatches", "large", "", "large"},
+		{"nil actual dispatches", "large", nil, "large"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.expectTarget, dtsSyncJobInstanceClassTransferTarget(c.configClass, c.actualClass))
+		})
+	}
+}
+
+func TestUnitAlicloudDTSSynchronizationJobInstanceClassValue(t *testing.T) {
+	assert.Equal(t, nil, dtsSyncJobInstanceClassValue(map[string]interface{}{}))
+	assert.Equal(t, nil, dtsSyncJobInstanceClassValue(map[string]interface{}{"DtsJobClass": nil}))
+	assert.Equal(t, nil, dtsSyncJobInstanceClassValue(map[string]interface{}{"DtsJobClass": ""}))
+	assert.Equal(t, "large", dtsSyncJobInstanceClassValue(map[string]interface{}{"DtsJobClass": "large"}))
+}
+
+func TestUnitAlicloudDTSSynchronizationJob(t *testing.T) {
+	p := Provider().(*schema.Provider).ResourcesMap
+	resSchema := schema.InternalMap(p["alicloud_dts_synchronization_job"].Schema)
+
+	region := os.Getenv("ALICLOUD_REGION")
+	rawClient, err := sharedClientForRegion(region)
+	if err != nil {
+		t.Skipf("Skipping the test case with err: %s", err)
+	}
+
+	jobDetailResponse := func(dtsJobClass string) map[string]interface{} {
+		return map[string]interface{}{
+			"Success":     true,
+			"DtsJobClass": dtsJobClass,
+			"Status":      "Synchronizing",
+			"MigrationMode": map[string]interface{}{
+				"DataInitialization":      true,
+				"DataSynchronization":     true,
+				"StructureInitialization": true,
+			},
+			"DestinationEndpoint": map[string]interface{}{},
+			"SourceEndpoint":      map[string]interface{}{},
+		}
+	}
+
+	newResourceData := func(oldClass, newClass string) *schema.ResourceData {
+		base := map[string]string{
+			"dts_instance_id": "dtsi93b3q2p1t6d1****",
+			"dts_job_name":    "unit-test-job",
+			"db_list":         `{"unit":{"name":"unit","all":true}}`,
+			"instance_class":  oldClass,
+		}
+		s := &terraform.InstanceState{ID: "dtsj93b3q2p1t6d1****", Attributes: base}
+		newAttrs := map[string]string{}
+		for k, v := range base {
+			newAttrs[k] = v
+		}
+		newAttrs["instance_class"] = newClass
+		config := map[string]interface{}{}
+		for k, v := range newAttrs {
+			config[k] = v
+		}
+		diff, err := resSchema.Diff(s, &terraform.ResourceConfig{Config: config}, nil, nil, false)
+		assert.Nil(t, err)
+		d, err := resSchema.Data(s, diff)
+		assert.Nil(t, err)
+		return d
+	}
+
+	mockSeams := func(dtsJobClass string) {
+		dtsSyncJobDescribe = func(_ *connectivity.AliyunClient, _ string) (map[string]interface{}, error) {
+			return jobDetailResponse(dtsJobClass), nil
+		}
+		dtsSyncJobQueryChangedParameters = func(_ *connectivity.AliyunClient, _ string) (string, error) {
+			return "[]", nil
+		}
+	}
+	restoreSeams := func() {
+		dtsSyncJobDescribe = func(client *connectivity.AliyunClient, id string) (map[string]interface{}, error) {
+			dtsService := DtsService{client}
+			return dtsService.DescribeDtsSynchronizationJob(id)
+		}
+		dtsSyncJobRpcPost = func(client *connectivity.AliyunClient, apiProductCode string, apiVersion string, apiName string, query map[string]interface{}, body map[string]interface{}, autoRetry bool) (map[string]interface{}, error) {
+			return client.RpcPost(apiProductCode, apiVersion, apiName, query, body, autoRetry)
+		}
+		dtsSyncJobQueryChangedParameters = func(client *connectivity.AliyunClient, id string) (string, error) {
+			dtsService := DtsService{client}
+			return dtsService.QueryChangedJobParameters(id)
+		}
+	}
+
+	t.Run("update dispatches transfer when class differs", func(t *testing.T) {
+		transferCalled := false
+		dtsSyncJobDescribe = func(_ *connectivity.AliyunClient, _ string) (map[string]interface{}, error) {
+			if transferCalled {
+				return jobDetailResponse("large"), nil
+			}
+			return jobDetailResponse("small"), nil
+		}
+		dtsSyncJobQueryChangedParameters = func(_ *connectivity.AliyunClient, _ string) (string, error) {
+			return "[]", nil
+		}
+		defer restoreSeams()
+		var transferRequests []map[string]interface{}
+		dtsSyncJobRpcPost = func(_ *connectivity.AliyunClient, _ string, _ string, apiName string, _ map[string]interface{}, body map[string]interface{}, _ bool) (map[string]interface{}, error) {
+			if apiName == "TransferInstanceClass" {
+				transferRequests = append(transferRequests, body)
+				transferCalled = true
+			}
+			return map[string]interface{}{"Success": true}, nil
+		}
+		d := newResourceData("small", "large")
+		err := resourceAlicloudDtsSynchronizationJobUpdate(d, rawClient)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, len(transferRequests))
+		assert.Equal(t, "large", transferRequests[0]["InstanceClass"])
+		assert.Equal(t, "UPGRADE", transferRequests[0]["OrderType"])
+		assert.Equal(t, "large", d.Get("instance_class"))
+	})
+
+	t.Run("update skips transfer when config equals actual", func(t *testing.T) {
+		mockSeams("small")
+		defer restoreSeams()
+		transferCalled := false
+		dtsSyncJobRpcPost = func(_ *connectivity.AliyunClient, _ string, _ string, apiName string, _ map[string]interface{}, _ map[string]interface{}, _ bool) (map[string]interface{}, error) {
+			if apiName == "TransferInstanceClass" {
+				transferCalled = true
+			}
+			return map[string]interface{}{"Success": true}, nil
+		}
+		d := newResourceData("4xlarge", "small")
+		err := resourceAlicloudDtsSynchronizationJobUpdate(d, rawClient)
+		assert.Nil(t, err)
+		assert.False(t, transferCalled)
+		assert.Equal(t, "small", d.Get("instance_class"))
+	})
+
+	t.Run("update skips transfer without instance_class change", func(t *testing.T) {
+		mockSeams("small")
+		defer restoreSeams()
+		describeCalls := 0
+		dtsSyncJobDescribe = func(_ *connectivity.AliyunClient, _ string) (map[string]interface{}, error) {
+			describeCalls++
+			return jobDetailResponse("small"), nil
+		}
+		transferCalled := false
+		dtsSyncJobRpcPost = func(_ *connectivity.AliyunClient, _ string, _ string, apiName string, _ map[string]interface{}, _ map[string]interface{}, _ bool) (map[string]interface{}, error) {
+			if apiName == "TransferInstanceClass" {
+				transferCalled = true
+			}
+			return map[string]interface{}{"Success": true}, nil
+		}
+		d := newResourceData("small", "small")
+		err := resourceAlicloudDtsSynchronizationJobUpdate(d, rawClient)
+		assert.Nil(t, err)
+		assert.False(t, transferCalled)
+		// describe is only invoked by the trailing read, never by the instance_class branch
+		assert.Equal(t, 1, describeCalls)
+	})
+
+	t.Run("update returns error when describe fails", func(t *testing.T) {
+		restoreSeams()
+		defer restoreSeams()
+		dtsSyncJobDescribe = func(_ *connectivity.AliyunClient, _ string) (map[string]interface{}, error) {
+			return nil, fmt.Errorf("mock describe failure")
+		}
+		d := newResourceData("small", "large")
+		err := resourceAlicloudDtsSynchronizationJobUpdate(d, rawClient)
+		assert.NotNil(t, err)
+	})
+
+	t.Run("read writes back actual instance class", func(t *testing.T) {
+		mockSeams("4xlarge")
+		defer restoreSeams()
+		d, err := resSchema.Data(&terraform.InstanceState{ID: "dtsj93b3q2p1t6d1****", Attributes: map[string]string{}}, nil)
+		assert.Nil(t, err)
+		err = resourceAlicloudDtsSynchronizationJobRead(d, rawClient)
+		assert.Nil(t, err)
+		assert.Equal(t, "4xlarge", d.Get("instance_class"))
+	})
+
+	t.Run("read keeps state when actual class is empty", func(t *testing.T) {
+		mockSeams("")
+		defer restoreSeams()
+		d, err := resSchema.Data(&terraform.InstanceState{ID: "dtsj93b3q2p1t6d1****", Attributes: map[string]string{"instance_class": "large"}}, nil)
+		assert.Nil(t, err)
+		err = resourceAlicloudDtsSynchronizationJobRead(d, rawClient)
+		assert.Nil(t, err)
+		assert.Equal(t, "large", d.Get("instance_class"))
+	})
 }

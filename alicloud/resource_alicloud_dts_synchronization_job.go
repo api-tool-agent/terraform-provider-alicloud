@@ -12,6 +12,20 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
+var dtsSyncJobDescribe = func(client *connectivity.AliyunClient, id string) (map[string]interface{}, error) {
+	dtsService := DtsService{client}
+	return dtsService.DescribeDtsSynchronizationJob(id)
+}
+
+var dtsSyncJobRpcPost = func(client *connectivity.AliyunClient, apiProductCode string, apiVersion string, apiName string, query map[string]interface{}, body map[string]interface{}, autoRetry bool) (map[string]interface{}, error) {
+	return client.RpcPost(apiProductCode, apiVersion, apiName, query, body, autoRetry)
+}
+
+var dtsSyncJobQueryChangedParameters = func(client *connectivity.AliyunClient, id string) (string, error) {
+	dtsService := DtsService{client}
+	return dtsService.QueryChangedJobParameters(id)
+}
+
 func resourceAlicloudDtsSynchronizationJob() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAlicloudDtsSynchronizationJobCreate,
@@ -425,8 +439,7 @@ func resourceAlicloudDtsSynchronizationJobCreate(d *schema.ResourceData, meta in
 }
 func resourceAlicloudDtsSynchronizationJobRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	dtsService := DtsService{client}
-	object, err := dtsService.DescribeDtsSynchronizationJob(d.Id())
+	object, err := dtsSyncJobDescribe(client, d.Id())
 	if err != nil {
 		if NotFoundError(err) {
 			log.Printf("[DEBUG] Resource alicloud_dts_synchronization_job dtsService.DescribeDtsSynchronizationJob Failed!!! %s", err)
@@ -477,7 +490,7 @@ func resourceAlicloudDtsSynchronizationJobRead(d *schema.ResourceData, meta inte
 	d.Set("structure_initialization", migrationModeObj["StructureInitialization"])
 	d.Set("synchronization_direction", object["SynchronizationDirection"])
 
-	parameters, err := dtsService.QueryChangedJobParameters(d.Id())
+	parameters, err := dtsSyncJobQueryChangedParameters(client, d.Id())
 	if err != nil {
 		if NotFoundError(err) {
 			log.Printf("[DEBUG] Resource alicloud_dts_synchronization_job dtsService.DescribeDtsSynchronizationJob Failed!!! %s", err)
@@ -617,8 +630,7 @@ func resourceAlicloudDtsSynchronizationJobUpdate(d *schema.ResourceData, meta in
 		"DtsJobId": d.Id(),
 	}
 	if d.HasChange("instance_class") {
-		dtsService := DtsService{client}
-		object, err := dtsService.DescribeDtsSynchronizationJob(d.Id())
+		object, err := dtsSyncJobDescribe(client, d.Id())
 		if err != nil {
 			return WrapError(err)
 		}
@@ -634,7 +646,7 @@ func resourceAlicloudDtsSynchronizationJobUpdate(d *schema.ResourceData, meta in
 		action := "TransferInstanceClass"
 		wait := incrementalWait(3*time.Second, 3*time.Second)
 		err = resource.Retry(d.Timeout(schema.TimeoutUpdate), func() *resource.RetryError {
-			response, err = client.RpcPost("Dts", "2020-01-01", action, nil, request, false)
+			response, err = dtsSyncJobRpcPost(client, "Dts", "2020-01-01", action, nil, request, false)
 			if err != nil {
 				if NeedRetry(err) {
 					wait()
@@ -990,7 +1002,10 @@ func dtsSyncJobInstanceClassTransferTarget(configClass, actualClass interface{})
 		return ""
 	}
 	actual := fmt.Sprint(actualClass)
-	if actual == "<nil>" || actual == "" || config == actual {
+	if actual == "<nil>" {
+		actual = ""
+	}
+	if config == actual {
 		return ""
 	}
 	return config
