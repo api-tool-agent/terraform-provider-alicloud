@@ -439,6 +439,9 @@ func resourceAlicloudDtsSynchronizationJobRead(d *schema.ResourceData, meta inte
 	destinationEndpointObj := object["DestinationEndpoint"].(map[string]interface{})
 	sourceEndpointObj := object["SourceEndpoint"].(map[string]interface{})
 	d.Set("checkpoint", fmt.Sprint(formatInt(object["Checkpoint"])))
+	if v := dtsSyncJobInstanceClassValue(object); v != nil {
+		d.Set("instance_class", v)
+	}
 	d.Set("data_initialization", migrationModeObj["DataInitialization"])
 	d.Set("data_synchronization", migrationModeObj["DataSynchronization"])
 	d.Set("db_list", object["DbObject"])
@@ -614,10 +617,15 @@ func resourceAlicloudDtsSynchronizationJobUpdate(d *schema.ResourceData, meta in
 		"DtsJobId": d.Id(),
 	}
 	if d.HasChange("instance_class") {
-		if v, ok := d.GetOk("instance_class"); ok {
-			request["InstanceClass"] = v
+		dtsService := DtsService{client}
+		object, err := dtsService.DescribeDtsSynchronizationJob(d.Id())
+		if err != nil {
+			return WrapError(err)
 		}
-		update = true
+		if targetClass := dtsSyncJobInstanceClassTransferTarget(d.Get("instance_class"), object["DtsJobClass"]); targetClass != "" {
+			request["InstanceClass"] = targetClass
+			update = true
+		}
 	}
 	request["RegionId"] = client.RegionId
 	request["OrderType"] = "UPGRADE"
@@ -960,4 +968,30 @@ func convertSourceEndpointEngineNameUppercaseResponse(source interface{}) interf
 		return "DMSPOLARDB"
 	}
 	return source
+}
+
+// dtsSyncJobInstanceClassValue extracts the actual job class from the DescribeDtsJobDetail
+// response, returning nil when the server reported no class so the state is left untouched.
+func dtsSyncJobInstanceClassValue(object map[string]interface{}) interface{} {
+	v, ok := object["DtsJobClass"]
+	if !ok || v == nil || fmt.Sprint(v) == "" {
+		return nil
+	}
+	return v
+}
+
+// dtsSyncJobInstanceClassTransferTarget decides whether TransferInstanceClass should be
+// dispatched. The DTS service judges upgrade/downgrade by comparing the target class with the
+// actual one, and a downgrade without permission fails with 403, so the call must be skipped
+// when the configured class is empty or identical to the actual class.
+func dtsSyncJobInstanceClassTransferTarget(configClass, actualClass interface{}) string {
+	config := fmt.Sprint(configClass)
+	if config == "" || config == "<nil>" {
+		return ""
+	}
+	actual := fmt.Sprint(actualClass)
+	if actual == "<nil>" || actual == "" || config == actual {
+		return ""
+	}
+	return config
 }
