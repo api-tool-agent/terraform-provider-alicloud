@@ -172,6 +172,7 @@ func Provider() terraform.ResourceProvider {
 			},
 		},
 		DataSourcesMap: map[string]*schema.Resource{
+			"alicloud_apig_plugin_attachments":                        dataSourceAliCloudApigPluginAttachments(),
 			"alicloud_ens_load_balancer_udp_listeners":                dataSourceAliCloudEnsLoadBalancerUdpListeners(),
 			"alicloud_ecd_desktop_groups":                             dataSourceAliCloudEcdDesktopGroups(),
 			"alicloud_redis_global_security_ip_groups":                dataSourceAliCloudRedisGlobalSecurityIpGroups(),
@@ -965,6 +966,7 @@ func Provider() terraform.ResourceProvider {
 			"alicloud_sls_metric_stores":                                dataSourceAliCloudSlsMetricStores(),
 		},
 		ResourcesMap: map[string]*schema.Resource{
+			"alicloud_apig_plugin_attachment":                               resourceAliCloudApigPluginAttachment(),
 			"alicloud_ens_load_balancer_udp_listener":                       resourceAliCloudEnsLoadBalancerUdpListener(),
 			"alicloud_gpdb_db_extension":                                    resourceAliCloudGpdbDbExtension(),
 			"alicloud_ecd_desktop_group":                                    resourceAliCloudEcdDesktopGroup(),

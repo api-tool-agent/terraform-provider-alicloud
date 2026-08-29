@@ -992,3 +992,96 @@ func (s *ApigServiceV2) ApigAiModelProviderStateRefreshFuncWithApi(id string, fi
 }
 
 // DescribeApigAiModelProvider >>> Encapsulated.
+// DescribeApigPluginAttachment <<< Encapsulated get interface for Apig PluginAttachment.
+
+func (s *ApigServiceV2) DescribeApigPluginAttachment(id string) (object map[string]interface{}, err error) {
+	client := s.client
+	var request map[string]interface{}
+	var response map[string]interface{}
+	var query map[string]*string
+	request = make(map[string]interface{})
+	query = make(map[string]*string)
+
+	action := fmt.Sprintf("/v1/plugin-attachments")
+
+	wait := incrementalWait(3*time.Second, 5*time.Second)
+	err = resource.Retry(1*time.Minute, func() *resource.RetryError {
+		response, err = client.RoaGet("APIG", "2024-03-27", action, query, nil, nil)
+
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return resource.RetryableError(err)
+			}
+			return resource.NonRetryableError(err)
+		}
+		return nil
+	})
+	addDebug(action, response, request)
+	if response == nil {
+		return object, WrapErrorf(NotFoundErr("PluginAttachment", id), NotFoundMsg, response)
+	}
+	if err != nil {
+		if IsExpectedErrors(err, []string{"DatabaseError.RecordNotFound"}) {
+			return object, WrapErrorf(NotFoundErr("PluginAttachment", id), NotFoundMsg, response)
+		}
+		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
+	code, _ := jsonpath.Get("$.code", response)
+	if InArray(fmt.Sprint(code), []string{"DatabaseError.RecordNotFound"}) {
+		return object, WrapErrorf(NotFoundErr("PluginAttachment", id), NotFoundMsg, response)
+	}
+
+	v, err := jsonpath.Get("$.data.items[*]", response)
+	if err != nil {
+		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.data.items[*]", response)
+	}
+
+	if len(v.([]interface{})) == 0 {
+		return object, WrapErrorf(NotFoundErr("PluginAttachment", id), NotFoundMsg, response)
+	}
+
+	result, _ := v.([]interface{})
+	for _, v := range result {
+		item := v.(map[string]interface{})
+		if fmt.Sprint(item["pluginAttachmentId"]) != id {
+			continue
+		}
+		return item, nil
+	}
+	return object, WrapErrorf(NotFoundErr("PluginAttachment", id), NotFoundMsg, response)
+}
+
+func (s *ApigServiceV2) ApigPluginAttachmentStateRefreshFunc(id string, field string, failStates []string) resource.StateRefreshFunc {
+	return s.ApigPluginAttachmentStateRefreshFuncWithApi(id, field, failStates, s.DescribeApigPluginAttachment)
+}
+
+func (s *ApigServiceV2) ApigPluginAttachmentStateRefreshFuncWithApi(id string, field string, failStates []string, call func(id string) (map[string]interface{}, error)) resource.StateRefreshFunc {
+	return func() (interface{}, string, error) {
+		object, err := call(id)
+		if err != nil {
+			if NotFoundError(err) {
+				return object, "", nil
+			}
+			return nil, "", WrapError(err)
+		}
+		v, err := jsonpath.Get(field, object)
+		currentStatus := fmt.Sprint(v)
+
+		if strings.HasPrefix(field, "#") {
+			v, _ := jsonpath.Get(strings.TrimPrefix(field, "#"), object)
+			if v != nil {
+				currentStatus = "#CHECKSET"
+			}
+		}
+
+		for _, failState := range failStates {
+			if currentStatus == failState {
+				return object, currentStatus, WrapError(Error(FailedToReachTargetStatus, currentStatus))
+			}
+		}
+		return object, currentStatus, nil
+	}
+}
+
+// DescribeApigPluginAttachment >>> Encapsulated.
