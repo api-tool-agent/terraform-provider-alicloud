@@ -190,7 +190,13 @@ func resourceAliCloudApigPluginAttachmentRead(d *schema.ResourceData, meta inter
 	client := meta.(*connectivity.AliyunClient)
 	apigServiceV2 := ApigServiceV2{client}
 
-	objectRaw, err := apigServiceV2.DescribeApigPluginAttachment(d.Id())
+	var objectRaw map[string]interface{}
+	var err error
+	if v := d.Get("plugin_info.0.gateway_id"); v != nil && fmt.Sprint(v) != "" {
+		objectRaw, err = apigServiceV2.DescribeApigPluginAttachmentWithGateway(d.Id(), fmt.Sprint(v))
+	} else {
+		objectRaw, err = apigServiceV2.DescribeApigPluginAttachment(d.Id())
+	}
 	if err != nil {
 		if !d.IsNewResource() && NotFoundError(err) {
 			log.Printf("[DEBUG] Resource alicloud_apig_plugin_attachment DescribeApigPluginAttachment Failed!!! %s", err)
