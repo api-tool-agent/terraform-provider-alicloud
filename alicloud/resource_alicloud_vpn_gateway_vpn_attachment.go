@@ -2,7 +2,6 @@ package alicloud
 
 import (
 	"fmt"
-	"hash/crc32"
 	"log"
 	"strings"
 	"time"
@@ -12,16 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
-
-func vpnTunnelOptionsSpecificationHash(v interface{}) int {
-	m := v.(map[string]interface{})
-	s := fmt.Sprintf("%d-%s", m["tunnel_index"].(int), m["customer_gateway_id"].(string))
-	h := int(crc32.ChecksumIEEE([]byte(s)))
-	if h < 0 {
-		return -h
-	}
-	return h
-}
 
 func resourceAliCloudVpnGatewayVpnAttachment() *schema.Resource {
 	return &schema.Resource{
@@ -276,7 +265,6 @@ func resourceAliCloudVpnGatewayVpnAttachment() *schema.Resource {
 				Type:     schema.TypeSet,
 				Optional: true,
 				Computed: true,
-				Set:      vpnTunnelOptionsSpecificationHash,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"status": {
@@ -818,6 +806,13 @@ func resourceAliCloudVpnGatewayVpnAttachmentRead(d *schema.ResourceData, meta in
 	if err := d.Set("health_check_config", healthCheckConfigMaps); err != nil {
 		return err
 	}
+	// Preserve user-configured psk to avoid overwriting with API-masked value (e.g. "123456****").
+	var existingTopLevelPsk string
+	if l := d.Get("ike_config").([]interface{}); len(l) > 0 {
+		if m, ok := l[0].(map[string]interface{}); ok {
+			existingTopLevelPsk, _ = m["psk"].(string)
+		}
+	}
 	ikeConfigMaps := make([]map[string]interface{}, 0)
 	ikeConfigMap := make(map[string]interface{})
 	ikeConfigRaw := make(map[string]interface{})
@@ -832,7 +827,12 @@ func resourceAliCloudVpnGatewayVpnAttachmentRead(d *schema.ResourceData, meta in
 		ikeConfigMap["ike_pfs"] = ikeConfigRaw["IkePfs"]
 		ikeConfigMap["ike_version"] = ikeConfigRaw["IkeVersion"]
 		ikeConfigMap["local_id"] = ikeConfigRaw["LocalId"]
-		ikeConfigMap["psk"] = ikeConfigRaw["Psk"]
+		pskFromAPI, _ := ikeConfigRaw["Psk"].(string)
+		if existingTopLevelPsk != "" {
+			ikeConfigMap["psk"] = existingTopLevelPsk
+		} else {
+			ikeConfigMap["psk"] = pskFromAPI
+		}
 		ikeConfigMap["remote_id"] = ikeConfigRaw["RemoteId"]
 
 		ikeConfigMaps = append(ikeConfigMaps, ikeConfigMap)
@@ -859,6 +859,21 @@ func resourceAliCloudVpnGatewayVpnAttachmentRead(d *schema.ResourceData, meta in
 	}
 	tagsMaps, _ := jsonpath.Get("$.Tags.Tag", objectRaw)
 	d.Set("tags", tagsToMap(tagsMaps))
+	// Build index of existing user-configured tunnel-level psk by tunnel_index to avoid
+	// overwriting with API-masked values (e.g. "123456****").
+	existingIkePskByIndex := make(map[int]string)
+	if existingSet, ok := d.Get("tunnel_options_specification").(*schema.Set); ok {
+		for _, elem := range existingSet.List() {
+			m := elem.(map[string]interface{})
+			if ikeList, ok := m["tunnel_ike_config"].([]interface{}); ok && len(ikeList) > 0 {
+				if ikeMap, ok := ikeList[0].(map[string]interface{}); ok {
+					if psk, ok := ikeMap["psk"].(string); ok && psk != "" {
+						existingIkePskByIndex[formatInt(m["tunnel_index"])] = psk
+					}
+				}
+			}
+		}
+	}
 	tunnelOptionsRaw, _ := jsonpath.Get("$.TunnelOptionsSpecification.TunnelOptions", objectRaw)
 	tunnelOptionsSpecificationMaps := make([]map[string]interface{}, 0)
 	if tunnelOptionsRaw != nil {
@@ -909,7 +924,12 @@ func resourceAliCloudVpnGatewayVpnAttachmentRead(d *schema.ResourceData, meta in
 				tunnelIkeConfigMap["ike_pfs"] = tunnelIkeConfigRaw["IkePfs"]
 				tunnelIkeConfigMap["ike_version"] = tunnelIkeConfigRaw["IkeVersion"]
 				tunnelIkeConfigMap["local_id"] = tunnelIkeConfigRaw["LocalId"]
-				tunnelIkeConfigMap["psk"] = tunnelIkeConfigRaw["Psk"]
+				pskFromAPI, _ := tunnelIkeConfigRaw["Psk"].(string)
+				if existingPsk, ok := existingIkePskByIndex[formatInt(tunnelOptionsChildRaw["TunnelIndex"])]; ok && existingPsk != "" {
+					tunnelIkeConfigMap["psk"] = existingPsk
+				} else {
+					tunnelIkeConfigMap["psk"] = pskFromAPI
+				}
 				tunnelIkeConfigMap["remote_id"] = tunnelIkeConfigRaw["RemoteId"]
 
 				tunnelIkeConfigMaps = append(tunnelIkeConfigMaps, tunnelIkeConfigMap)
@@ -1020,7 +1040,7 @@ func resourceAliCloudVpnGatewayVpnAttachmentUpdate(d *schema.ResourceData, meta 
 		request["EnableTunnelsBgp"] = d.Get("enable_tunnels_bgp")
 	}
 
-	if !d.IsNewResource() && d.HasChange("tunnel_options_specification") {
+	if !d.IsNewResource() && (d.HasChange("tunnel_options_specification") || d.HasChange("enable_tunnels_bgp")) {
 		update = true
 		if v, ok := d.GetOk("tunnel_options_specification"); ok || d.HasChange("tunnel_options_specification") {
 			tunnelOptionsSpecificationMapsArray := make([]interface{}, 0)

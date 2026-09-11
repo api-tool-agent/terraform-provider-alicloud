@@ -792,6 +792,81 @@ func TestUnitAccAlicloudVpnGatewayVpnAttachment(t *testing.T) {
 	}
 }
 
+// TestUnitVpnTunnelOptionsSpecificationHash verifies that the SDK default hash
+// (schema.HashResource) for tunnel_options_specification correctly captures
+// changes to nested writable fields (psk, local_asn, tunnel_cidr) and ignores
+// purely computed fields (status, tunnel_id). This covers the bug where the
+// old custom hash only used tunnel_index + customer_gateway_id, causing
+// diffSet to short-circuit and hide nested field changes from plan/apply.
+func TestUnitVpnTunnelOptionsSpecificationHash(t *testing.T) {
+	r := resourceAliCloudVpnGatewayVpnAttachment()
+	tunnelOptionsSchema := r.Schema["tunnel_options_specification"]
+	hashFn := schema.HashResource(tunnelOptionsSchema.Elem.(*schema.Resource))
+
+	baseTunnel := func(psk string, localAsn int, tunnelCidr string) map[string]interface{} {
+		return map[string]interface{}{
+			"tunnel_index":         1,
+			"customer_gateway_id":  "cgw-abc123",
+			"role":                 "master",
+			"enable_dpd":           true,
+			"enable_nat_traversal": true,
+			"tunnel_ike_config": []interface{}{
+				map[string]interface{}{
+					"psk":          psk,
+					"ike_auth_alg": "md5",
+					"ike_enc_alg":  "aes",
+					"ike_lifetime": 86400,
+					"ike_mode":     "main",
+					"ike_pfs":      "group2",
+					"ike_version":  "ikev2",
+					"local_id":     "1.1.1.1",
+					"remote_id":    "2.2.2.2",
+				},
+			},
+			"tunnel_bgp_config": []interface{}{
+				map[string]interface{}{
+					"local_asn":    localAsn,
+					"local_bgp_ip": "169.254.10.1",
+					"tunnel_cidr":  tunnelCidr,
+				},
+			},
+			"tunnel_ipsec_config": []interface{}{
+				map[string]interface{}{
+					"ipsec_auth_alg": "sha1",
+					"ipsec_enc_alg":  "aes",
+					"ipsec_lifetime": 86400,
+					"ipsec_pfs":      "group5",
+				},
+			},
+		}
+	}
+
+	// Baseline hash
+	h0 := hashFn(baseTunnel("12345678", 1219001, "169.254.10.0/30"))
+
+	// Changing psk must change the hash
+	h1 := hashFn(baseTunnel("87654321", 1219001, "169.254.10.0/30"))
+	assert.NotEqual(t, h0, h1, "changing tunnel_ike_config.psk must change hash")
+
+	// Changing local_asn must change the hash
+	h2 := hashFn(baseTunnel("12345678", 1219002, "169.254.10.0/30"))
+	assert.NotEqual(t, h0, h2, "changing tunnel_bgp_config.local_asn must change hash")
+
+	// Changing tunnel_cidr must change the hash
+	h3 := hashFn(baseTunnel("12345678", 1219001, "169.254.20.0/30"))
+	assert.NotEqual(t, h0, h3, "changing tunnel_bgp_config.tunnel_cidr must change hash")
+
+	// Changing only computed fields must NOT change the hash
+	withComputed := baseTunnel("12345678", 1219001, "169.254.10.0/30")
+	withComputed["status"] = "active"
+	withComputed["tunnel_id"] = "tun-abc123"
+	withComputed["zone_no"] = "cn-huhehaote-a"
+	withComputed["internet_ip"] = "8.8.8.8"
+	withComputed["state"] = "normal"
+	h4 := hashFn(withComputed)
+	assert.Equal(t, h0, h4, "changing only computed fields must not change hash")
+}
+
 // Test VpnGateway VpnAttachment. >>> Resource test cases, automatically generated.
 // Case 双隧道VpnAttachment测试用例-基础增删改查 10338
 func TestAccAliCloudVpnGatewayVpnAttachment_basic10338(t *testing.T) {
@@ -965,6 +1040,95 @@ func TestAccAliCloudVpnGatewayVpnAttachment_basic10338(t *testing.T) {
 									"ike_version":  "ikev1",
 									"local_id":     "5.5.5.5",
 									"psk":          "123456789",
+									"remote_id":    "4.4.4.4",
+								},
+							},
+							"tunnel_ipsec_config": []map[string]interface{}{
+								{
+									"ipsec_auth_alg": "md5",
+									"ipsec_enc_alg":  "aes192",
+									"ipsec_lifetime": "86111",
+									"ipsec_pfs":      "disabled",
+								},
+							},
+							"customer_gateway_id": "${alicloud_vpn_customer_gateway.cgw2.id}",
+						},
+					},
+					"remote_subnet":     "9.0.0.0/8",
+					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.ids.1}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"local_subnet":                   "9.9.9.9/32",
+						"tunnel_options_specification.#": "2",
+						"remote_subnet":                  "9.0.0.0/8",
+						"resource_group_id":              CHECKSET,
+					}),
+				),
+			},
+			{
+				// Step 2.5: only nested fields (psk, tunnel_bgp_config) change;
+				// customer_gateway_id and tunnel_index stay the same as step 2.
+				// With the old custom hash (tunnel_index + customer_gateway_id only)
+				// this would produce no diff; the SDK default hash must detect it.
+				Config: testAccConfig(map[string]interface{}{
+					"local_subnet": "9.9.9.9/32",
+					"tunnel_options_specification": []map[string]interface{}{
+						{
+							"enable_dpd":           "false",
+							"enable_nat_traversal": "false",
+							"tunnel_index":         "2",
+							"tunnel_ike_config": []map[string]interface{}{
+								{
+									"psk":          "tunnel2newpsk",
+									"ike_auth_alg": "sha384",
+									"ike_enc_alg":  "aes256",
+									"ike_lifetime": "86122",
+									"ike_mode":     "aggressive",
+									"ike_pfs":      "group14",
+									"ike_version":  "ikev2",
+									"local_id":     "2.2.2.2",
+									"remote_id":    "3.3.3.3",
+								},
+							},
+							"customer_gateway_id": "${alicloud_vpn_customer_gateway.cgw2.id}",
+							"tunnel_bgp_config": []map[string]interface{}{
+								{
+									"local_asn":    "1219003",
+									"local_bgp_ip": "169.254.52.1",
+									"tunnel_cidr":  "169.254.52.0/30",
+								},
+							},
+							"tunnel_ipsec_config": []map[string]interface{}{
+								{
+									"ipsec_auth_alg": "sha512",
+									"ipsec_enc_alg":  "aes192",
+									"ipsec_lifetime": "86111",
+									"ipsec_pfs":      "disabled",
+								},
+							},
+						},
+						{
+							"enable_dpd":           "false",
+							"enable_nat_traversal": "false",
+							"tunnel_index":         "1",
+							"tunnel_bgp_config": []map[string]interface{}{
+								{
+									"local_asn":    "1219003",
+									"local_bgp_ip": "169.254.51.1",
+									"tunnel_cidr":  "169.254.51.0/30",
+								},
+							},
+							"tunnel_ike_config": []map[string]interface{}{
+								{
+									"ike_auth_alg": "sha384",
+									"ike_enc_alg":  "aes192",
+									"ike_lifetime": "86022",
+									"ike_mode":     "aggressive",
+									"ike_pfs":      "group2",
+									"ike_version":  "ikev1",
+									"local_id":     "5.5.5.5",
+									"psk":          "987654321",
 									"remote_id":    "4.4.4.4",
 								},
 							},

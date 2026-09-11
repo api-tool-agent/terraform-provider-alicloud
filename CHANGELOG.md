@@ -1,4 +1,9 @@
 ## 1.294.0 (Unreleased)
+
+BUG FIXES:
+
+- resource/alicloud_vpn_gateway_vpn_attachment: fix `tunnel_options_specification` nested fields (psk, tunnel_bgp_config, tunnel_ike_config, etc.) not detected by `terraform plan`, and `enable_tunnels_bgp` enable returning 400. ([#NNNN](https://github.com/aliyun/terraform-provider-alicloud/issues/NNNN))
+
 ## 1.293.0 (September 11, 2026)
 
 - **New Resource:** `alicloud_cms_dataset` ([#10454](https://github.com/aliyun/terraform-provider-alicloud/issues/10454))

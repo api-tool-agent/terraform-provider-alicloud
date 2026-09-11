@@ -215,7 +215,7 @@ Whether to enable the DPD (peer survival detection) function.
 Specifies whether to enable NAT traversal. Valid values:
   - true (default): enables NAT traversal. After NAT traversal is enabled, the initiator does not check the UDP ports during IKE negotiations and can automatically discover NAT gateway devices along the vpn attachment tunnel.
   - false: disables NAT traversal.
-* `enable_tunnels_bgp` - (Optional, Computed, Available since v1.246.0) You can configure this parameter when you create a vpn attachment in dual-tunnel mode.Whether to enable the BGP function for the tunnel. Value: `true` or `false` (default).
+* `enable_tunnels_bgp` - (Optional, Computed, Available since v1.246.0) You can configure this parameter when you create a vpn attachment in dual-tunnel mode.Whether to enable the BGP function for the tunnel. Value: `true` or `false` (default). When enabling BGP in-place (`false` to `true`), the `tunnel_bgp_config` blocks in `tunnel_options_specification` are submitted together so the API receives the required BGP configuration.
 
 -> **NOTE:**  before adding BGP configuration, we recommend that you understand the working mechanism and usage restrictions of the BGP dynamic routing function.
 
