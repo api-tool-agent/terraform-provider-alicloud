@@ -102,6 +102,16 @@ func resourceAlicloudDBAccountPrivilegeRead(d *schema.ResourceData, meta interfa
 			d.SetId("")
 			return nil
 		}
+		// A 403 OperationDenied(Read)DBInstanceStatus means the parent instance is
+		// in a terminal non-permissible state (refunded / recycle bin). Confirm via
+		// DescribeDBInstance (which maps the same 403 to NotFound); if the parent is
+		// gone, drop the privilege from state so refresh stops hard-failing.
+		if !d.IsNewResource() && IsExpectedErrors(err, dbInstanceGoneStatusCodes) {
+			if _, e := rsdService.DescribeDBInstance(parts[0]); e != nil && NotFoundError(e) {
+				d.SetId("")
+				return nil
+			}
+		}
 		return WrapError(err)
 	}
 
@@ -219,10 +229,24 @@ func resourceAlicloudDBAccountPrivilegeDelete(d *schema.ResourceData, meta inter
 	if err != nil {
 		return WrapError(err)
 	}
+	// If the parent instance is gone (refunded / recycle bin — surfaces as a 403,
+	// mapped to NotFound by DescribeDBInstance, or a real 404), the privilege no
+	// longer exists; return nil so destroy is idempotent instead of revoking
+	// per-DB against a dead instance.
+	if _, e := rdsService.DescribeDBInstance(parts[0]); e != nil && NotFoundError(e) {
+		return nil
+	}
 	object, err := rdsService.DescribeDBAccountPrivilege(d.Id())
 	if err != nil {
 		if NotFoundError(err) {
 			return nil
+		}
+		// 403 terminal on DescribeAccounts (parent in recycle bin) — confirm the
+		// parent is gone, then finish idempotently.
+		if IsExpectedErrors(err, dbInstanceGoneStatusCodes) {
+			if _, e := rdsService.DescribeDBInstance(parts[0]); e != nil && NotFoundError(e) {
+				return nil
+			}
 		}
 		return WrapError(err)
 	}
