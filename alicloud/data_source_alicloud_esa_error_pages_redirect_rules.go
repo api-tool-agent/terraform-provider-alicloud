@@ -187,8 +187,8 @@ func dataSourceAliCloudEsaErrorPagesRedirectRulesRead(d *schema.ResourceData, me
 		}
 
 		resp, err := jsonpath.Get("$.Configs", response)
-		if err != nil {
-			return WrapErrorf(err, FailedGetAttributeMsg, action, "$.Configs", response)
+		if err != nil || resp == nil {
+			break
 		}
 
 		result, _ := resp.([]interface{})

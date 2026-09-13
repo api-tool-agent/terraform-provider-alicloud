@@ -163,6 +163,16 @@ func TestAccAliCloudEsaErrorPagesRedirectRule_basic12504(t *testing.T) {
 				),
 			},
 			{
+				Config: testAccConfig(map[string]interface{}{
+					"sequence": "2",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"sequence": "2",
+					}),
+				),
+			},
+			{
 				ResourceName:            resourceId,
 				ImportState:             true,
 				ImportStateVerify:       true,
@@ -194,7 +204,7 @@ resource "alicloud_esa_rate_plan_instance" "resource_RatePlanInstance_test_Error
 }
 
 resource "alicloud_esa_site" "resource_Site_test_ErrorPagesRedirectRule" {
-  site_name   = "gositecdn.cn"
+  site_name   = "${var.name}.com"
   instance_id = alicloud_esa_rate_plan_instance.resource_RatePlanInstance_test_ErrorPagesRedirectRule.id
   coverage    = "overseas"
   access_type = "NS"

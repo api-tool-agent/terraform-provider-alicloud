@@ -80,7 +80,7 @@ The following arguments are supported:
   - `on`: Enable.
   - `off`: Disable.
 * `rule_name` - (Optional) Rule name. This parameter is not required when adding a global configuration.
-* `sequence` - (Optional, ForceNew, Int) Rule execution order. Rules with smaller values take higher priority.
+* `sequence` - (Optional, Int) Rule execution order. Rules with smaller values take higher priority.
 * `site_id` - (Required, ForceNew, Int) The site ID, which can be obtained by calling the [ListSites](https://help.aliyun.com/document_detail/2850189.html) operation.
 * `site_version` - (Optional, ForceNew, Int) The version number of the site configuration. For sites with configuration version management enabled, you can use this parameter to specify the site version for which the configuration takes effect. The default value is version 0.
 
