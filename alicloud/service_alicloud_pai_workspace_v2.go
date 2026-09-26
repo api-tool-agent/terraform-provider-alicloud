@@ -756,3 +756,90 @@ func (s *PaiWorkspaceServiceV2) PaiWorkspaceUserConfigStateRefreshFunc(id string
 }
 
 // DescribePaiWorkspaceUserConfig >>> Encapsulated.
+
+// DescribePaiWorkspaceConfig <<< Encapsulated get interface for PaiWorkspace Config.
+
+func (s *PaiWorkspaceServiceV2) DescribePaiWorkspaceConfig(id string) (object map[string]interface{}, err error) {
+	client := s.client
+	var request map[string]interface{}
+	var response map[string]interface{}
+	var query map[string]*string
+	parts := strings.Split(id, ":")
+	if len(parts) != 3 {
+		err = WrapError(fmt.Errorf("invalid Resource Id %s. Expected parts' length %d, got %d", id, 3, len(parts)))
+		return
+	}
+	request = make(map[string]interface{})
+	query = make(map[string]*string)
+	query["CategoryName"] = StringPointer(parts[1])
+	query["ConfigKey"] = StringPointer(parts[2])
+
+	action := fmt.Sprintf("/api/v1/workspaces/%s/configs", parts[0])
+
+	wait := incrementalWait(3*time.Second, 5*time.Second)
+	err = resource.Retry(1*time.Minute, func() *resource.RetryError {
+		response, err = client.RoaGet("AIWorkSpace", "2021-02-04", action, query, nil, nil)
+
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return resource.RetryableError(err)
+			}
+			return resource.NonRetryableError(err)
+		}
+		return nil
+	})
+	addDebug(action, response, request)
+	if err != nil {
+		if NotFoundError(err) {
+			return object, WrapErrorf(NotFoundErr("Config", id), NotFoundMsg, response)
+		}
+		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
+
+	v, err := jsonpath.Get("$.Configs[*]", response)
+	if err != nil {
+		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.Configs[*]", response)
+	}
+
+	configs, ok := v.([]interface{})
+	if !ok || len(configs) == 0 {
+		return object, WrapErrorf(NotFoundErr("Config", id), NotFoundMsg, response)
+	}
+
+	// Filter by CategoryName and ConfigKey to find the matching config
+	for _, configRaw := range configs {
+		if obj, ok := configRaw.(map[string]interface{}); ok {
+			if fmt.Sprint(obj["CategoryName"]) == parts[1] && fmt.Sprint(obj["ConfigKey"]) == parts[2] {
+				return obj, nil
+			}
+		}
+	}
+
+	// If no exact match, return the first config
+	return configs[0].(map[string]interface{}), nil
+}
+
+func (s *PaiWorkspaceServiceV2) PaiWorkspaceConfigStateRefreshFunc(id string, field string, failStates []string) resource.StateRefreshFunc {
+	return func() (interface{}, string, error) {
+		object, err := s.DescribePaiWorkspaceConfig(id)
+		if err != nil {
+			if NotFoundError(err) {
+				return object, "", nil
+			}
+			return nil, "", WrapError(err)
+		}
+
+		v, err := jsonpath.Get(field, object)
+		currentStatus := fmt.Sprint(v)
+
+		for _, failState := range failStates {
+			if currentStatus == failState {
+				return object, currentStatus, WrapError(Error(FailedToReachTargetStatus, currentStatus))
+			}
+		}
+		return object, currentStatus, nil
+	}
+}
+
+// DescribePaiWorkspaceConfig >>> Encapsulated.
