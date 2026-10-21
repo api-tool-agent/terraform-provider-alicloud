@@ -99,6 +99,9 @@ The following arguments are supported:
 * `time_series_engine_specification` - (Optional, Available since v1.182.0) The specification of time series engine. Valid values: `lindorm.g.xlarge`, `lindorm.g.2xlarge`, `lindorm.g.4xlarge`, `lindorm.g.8xlarge`, `lindorm.r.8xlarge`.
 * `stream_engine_node_count` - (Optional, Int, Available since v1.211.0) The number of LindormStream nodes in the instance.
 * `stream_engine_specification` - (Optional, Available since v1.211.0) The specification of the LindormStream nodes in the instance. Valid values: `lindorm.g.xlarge`, `lindorm.g.2xlarge`, `lindorm.g.4xlarge`, `lindorm.g.8xlarge`.
+* `phoenix_node_count` - (Optional, Int, Available since v2.1.0) The count of Phoenix nodes in the instance.
+* `phoenix_node_specification` - (Optional, String, Available since v2.1.0) The specification of Phoenix nodes in the instance. Valid values: `lindorm.c.xlarge`, `lindorm.c.2xlarge`, `lindorm.c.4xlarge`, `lindorm.c.8xlarge`, `lindorm.g.xlarge`, `lindorm.g.2xlarge`, `lindorm.g.4xlarge`, `lindorm.g.8xlarge`.
+* `upgrade_type` - (Optional, String, Available since v2.1.0) The upgrade type of the instance. Valid values: `open-phoenix-engine`, `upgrade-phoenix-engine`, `upgrade-phoenix-core-num`. **NOTE:** This parameter must be specified together with `phoenix_node_count` and `phoenix_node_specification`. `open-phoenix-engine` enables the Phoenix engine, `upgrade-phoenix-engine` upgrades the Phoenix engine specification, and `upgrade-phoenix-core-num` changes the number of Phoenix nodes.
 * `vpc_id` - (Optional, ForceNew, Available since v1.185.0) The VPC ID of the instance.
 * `zone_id` - (Optional, ForceNew) The zone ID of the instance.
 * `resource_group_id` - (Optional, ForceNew, Available since v1.177.0) The ID of the resource group.

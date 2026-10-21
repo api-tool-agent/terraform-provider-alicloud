@@ -182,6 +182,16 @@ func (s *HitsdbService) LindormInstanceStateRefreshFunc(id string, failStates []
 	}
 }
 
+func convertLindormInstancePaymentTypeResponse(source interface{}) interface{} {
+	switch source {
+	case "POSTPAY":
+		return "PayAsYouGo"
+	case "PREPAY":
+		return "Subscription"
+	}
+	return source
+}
+
 func (s *HitsdbService) ListTagResources(id string, resourceType string) (object interface{}, err error) {
 	client := s.client
 	action := "ListTagResources"
