@@ -1,4 +1,4 @@
-package alicloud
+package cloudfirewall_test
 
 import (
 	"context"
@@ -6,17 +6,26 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/PaesslerAG/jsonpath"
 	credentials "github.com/aliyun/credentials-go/credentials"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/acctest"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/errs"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/helper"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/logs"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/service/cloudfirewall"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	sdkterraform "github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+	tfacctest "github.com/hashicorp/terraform-plugin-testing/helper/acctest"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 // collection-order: bypass asset_region_resource_types -- pre-existing list unchanged by this PR; regression changes cover address_list unknown handling only
@@ -27,20 +36,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic0(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -114,20 +123,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic1(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -201,20 +210,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic2(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -288,20 +297,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic3(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -375,20 +384,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic4(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -496,20 +505,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic5(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -631,20 +640,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic6(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -783,20 +792,20 @@ func TestAccAliCloudCloudFirewallAddressBook_basic7(t *testing.T) {
 	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccCheck := rac.resourceAttrMapUpdateSet()
-	rand := acctest.RandIntRange(10000, 99999)
+	rand := tfacctest.RandIntRange(10000, 99999)
 	name := fmt.Sprintf("tf-testacc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
 		},
-		IDRefreshName:     resourceId,
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		IDRefreshName:            resourceId,
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -926,7 +935,7 @@ func TestUnitCloudFirewallAddressBookRefreshDiff(t *testing.T) {
 		{"empty", []interface{}{}, []interface{}{}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := resourceAliCloudCloudFirewallAddressBook()
+			r := cloudfirewall.ResourceAddressBook()
 			config := map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": tc.previous}
 			d := schema.TestResourceDataRaw(t, r.Schema, config)
 			d.SetId("address-book")
@@ -935,7 +944,7 @@ func TestUnitCloudFirewallAddressBookRefreshDiff(t *testing.T) {
 			if diags.HasError() {
 				t.Fatalf("%v", diags)
 			}
-			diff, err := r.Diff(context.Background(), refreshed, terraform.NewResourceConfigRaw(config), nil)
+			diff, err := r.Diff(context.Background(), refreshed, sdkterraform.NewResourceConfigRaw(config), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -954,7 +963,7 @@ func cloudFirewallAddressBookTestClient(t *testing.T, addresses []interface{}, i
 			check(req)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{"Acls": []interface{}{map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{"GroupUuid": "address-book", "Acls": []interface{}{map[string]interface{}{
 			"GroupUuid": "address-book", "GroupName": "test", "GroupType": "ip", "Description": "test", "AddressList": addresses, "TagList": []interface{}{},
 		}}}); err != nil {
 			t.Error(err)
@@ -995,14 +1004,14 @@ func TestUnitCloudFirewallAddressBookConfiguredDiff(t *testing.T) {
 		{"other change", []interface{}{a, b}, false, "updated", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := resourceAliCloudCloudFirewallAddressBook()
+			r := cloudfirewall.ResourceAddressBook()
 			d := schema.TestResourceDataRaw(t, r.Schema, map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": []interface{}{a, b}})
 			d.SetId("address-book")
 			config := map[string]interface{}{"group_name": "test", "group_type": "ip", "description": tc.description}
 			if !tc.omitted {
 				config["address_list"] = tc.addresses
 			}
-			diff, err := r.Diff(context.Background(), d.State(), terraform.NewResourceConfigRaw(config), nil)
+			diff, err := r.Diff(context.Background(), d.State(), sdkterraform.NewResourceConfigRaw(config), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1041,7 +1050,7 @@ func TestUnitCloudFirewallAddressBookConfiguredDiff(t *testing.T) {
 }
 
 func TestUnitCloudFirewallAddressBookApplyOrder(t *testing.T) {
-	r := resourceAliCloudCloudFirewallAddressBook()
+	r := cloudfirewall.ResourceAddressBook()
 	a, b := "192.0.2.1/32", "198.51.100.1/32"
 	config := map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": []interface{}{a, b}}
 	d := schema.TestResourceDataRaw(t, r.Schema, config)
@@ -1049,7 +1058,7 @@ func TestUnitCloudFirewallAddressBookApplyOrder(t *testing.T) {
 	client := cloudFirewallAddressBookTestClient(t, []interface{}{a, b})
 	for _, addresses := range [][]interface{}{{b, a}, {a, b}} {
 		config["address_list"] = addresses
-		diff, err := r.Diff(context.Background(), d.State(), terraform.NewResourceConfigRaw(config), nil)
+		diff, err := r.Diff(context.Background(), d.State(), sdkterraform.NewResourceConfigRaw(config), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1064,7 +1073,7 @@ func TestUnitCloudFirewallAddressBookApplyOrder(t *testing.T) {
 		if diags.HasError() {
 			t.Fatalf("%v", diags)
 		}
-		diff, err = r.Diff(context.Background(), refreshed, terraform.NewResourceConfigRaw(config), nil)
+		diff, err = r.Diff(context.Background(), refreshed, sdkterraform.NewResourceConfigRaw(config), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1078,15 +1087,17 @@ func TestUnitCloudFirewallAddressBookApplyOrder(t *testing.T) {
 func TestAccAliCloudCloudFirewallAddressBook_addressListOrder(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_cloud_firewall_address_book.default"
-	name := fmt.Sprintf("tf-testacc-address-order-%d", acctest.RandIntRange(10000, 99999))
+	name := fmt.Sprintf("tf-testacc-address-order-%d", tfacctest.RandIntRange(10000, 99999))
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
-	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} { return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)} }, "DescribeCloudFirewallAddressBook")
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheckWithRegions(t, true, connectivity.CloudFirewallSupportRegions) },
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		PreCheck:                 func() { testAccPreCheckWithRegions(t, true, connectivity.CloudFirewallSupportRegions) },
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{Config: testAccConfig(map[string]interface{}{"group_name": name, "group_type": "ip", "description": name, "address_list": []string{"192.0.2.1/32", "198.51.100.1/32", "203.0.113.1/32"}})},
 			{Config: testAccConfig(map[string]interface{}{"address_list": []string{"203.0.113.1/32", "192.0.2.1/32", "198.51.100.1/32"}}), PlanOnly: true, ExpectNonEmptyPlan: true},
@@ -1125,20 +1136,20 @@ func TestAccAliCloudCloudFirewallAddressBook_assetMemberUidsOrder(t *testing.T) 
 	var v, member map[string]interface{}
 	resourceId := "alicloud_cloud_firewall_address_book.default"
 	memberResourceId := "alicloud_cloud_firewall_instance_member.order"
-	name := fmt.Sprintf("tf-testacc-member-order-%d", acctest.RandIntRange(10000, 99999))
+	name := fmt.Sprintf("tf-testacc-member-order-%d", tfacctest.RandIntRange(10000, 99999))
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	memberCheck := resourceCheckInitWithDescribeMethod(memberResourceId, &member, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+		return &cloudFirewallInstanceMemberTestService{client: acctest.Provider.Meta().(*connectivity.AliyunClient)}
 	}, "DescribeCloudFirewallInstanceMember")
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, cloudFirewallAddressBookMemberOrderDependence)
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheckWithRegions(t, true, connectivity.CloudFirewallSupportRegions) },
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      resource.ComposeTestCheckFunc(rac.checkResourceDestroy(), memberCheck.checkResourceDestroy()),
+		PreCheck:                 func() { testAccPreCheckWithRegions(t, true, connectivity.CloudFirewallSupportRegions) },
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             resource.ComposeTestCheckFunc(rac.checkResourceDestroy(), memberCheck.checkResourceDestroy()),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -1205,9 +1216,9 @@ resource "alicloud_cloud_firewall_instance_member" "order" {
 }
 
 func TestUnitCloudFirewallAddressBookImportOrder(t *testing.T) {
-	r := resourceAliCloudCloudFirewallAddressBook()
+	r := cloudfirewall.ResourceAddressBook()
 	client := cloudFirewallAddressBookTestClient(t, []interface{}{"198.51.100.1/32", "192.0.2.1/32", "192.0.2.1/32"})
-	refreshed, diags := r.RefreshWithoutUpgrade(context.Background(), &terraform.InstanceState{ID: "address-book", Attributes: map[string]string{}}, client)
+	refreshed, diags := r.RefreshWithoutUpgrade(context.Background(), &sdkterraform.InstanceState{ID: "address-book", Attributes: map[string]string{}}, client)
 	if diags.HasError() {
 		t.Fatalf("%v", diags)
 	}
@@ -1219,7 +1230,7 @@ func TestUnitCloudFirewallAddressBookImportOrder(t *testing.T) {
 }
 
 func TestUnitCloudFirewallAddressBookNewOccurrencesOrder(t *testing.T) {
-	r := resourceAliCloudCloudFirewallAddressBook()
+	r := cloudfirewall.ResourceAddressBook()
 	d := schema.TestResourceDataRaw(t, r.Schema, map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": []interface{}{"192.0.2.1/32"}})
 	d.SetId("address-book")
 	client := cloudFirewallAddressBookTestClient(t, []interface{}{"192.0.2.1/32", "198.51.100.1/32", "192.0.2.1/32"})
@@ -1240,18 +1251,18 @@ func TestUnitCloudFirewallAddressBookNewOccurrencesOrder(t *testing.T) {
 func TestAccAliCloudCloudFirewallAddressBook_addressListRemoteOrder(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_cloud_firewall_address_book.default"
-	name := fmt.Sprintf("tf-testacc-remote-order-%d", acctest.RandIntRange(10000, 99999))
+	name := fmt.Sprintf("tf-testacc-remote-order-%d", tfacctest.RandIntRange(10000, 99999))
 	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
 	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
-		return &CloudfwService{testAccProvider.Meta().(*connectivity.AliyunClient)}
-	}, "DescribeCloudFirewallAddressBook")
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
 	rac := resourceAttrCheckInit(rc, ra)
 	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
 	observedDifferentOrder := false
 	resource.Test(t, resource.TestCase{
-		PreCheck:          func() { testAccPreCheckWithRegions(t, true, connectivity.CloudFirewallSupportRegions) },
-		ProviderFactories: testAccProviderFactory,
-		CheckDestroy:      rac.checkResourceDestroy(),
+		PreCheck:                 func() { testAccPreCheckWithRegions(t, true, connectivity.CloudFirewallSupportRegions) },
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -1307,10 +1318,10 @@ func testAccCloudFirewallAddressBookObserveRemoteOrder(t *testing.T, resourceId 
 		if !ok || rs.Primary == nil || rs.Primary.ID == "" {
 			return fmt.Errorf("test address book is missing from state")
 		}
-		client := testAccProvider.Meta().(*connectivity.AliyunClient)
-		service := CloudfwService{client}
+		client := acctest.Provider.Meta().(*connectivity.AliyunClient)
+		service := cloudfirewall.NewService(client)
 		readDifferentOrder := func() (bool, error) {
-			object, err := service.DescribeCloudFirewallAddressBook(rs.Primary.ID)
+			object, err := service.DescribeAddressBook(rs.Primary.ID)
 			if err != nil {
 				return false, err
 			}
@@ -1354,11 +1365,11 @@ func testAccCloudFirewallAddressBookObserveRemoteOrder(t *testing.T, resourceId 
 				if err == nil {
 					return nil
 				}
-				if IsExpectedErrors(err, []string{"not buy user"}) {
+				if errs.IsExpectedErrors(err, []string{"not buy user"}) {
 					endpoint = connectivity.CloudFirewallOpenAPIEndpointControlPolicy
 					return resource.RetryableError(err)
 				}
-				if NeedRetry(err) {
+				if helper.NeedRetry(err) {
 					return resource.RetryableError(err)
 				}
 				return resource.NonRetryableError(err)
@@ -1375,4 +1386,297 @@ func testAccCloudFirewallAddressBookObserveRemoteOrder(t *testing.T, resourceId 
 		*observed = *observed || differs
 		return nil
 	}
+}
+
+// The CloudFirewall acceptance tests used the root package helpers before the
+// migration. The split package keeps the same region selection: CloudFirewall
+// only exists in ap-southeast-1 and cn-hangzhou, so an unsupported ALICLOUD_REGION
+// is replaced before any name or provider is built.
+var defaultRegionToTest = func() string {
+	if v := os.Getenv("ALICLOUD_REGION"); v != "" {
+		return v
+	}
+	return "cn-beijing"
+}()
+
+func testAccPreCheck(t *testing.T) {
+	acctest.PreCheck(t)
+	defaultRegionToTest = os.Getenv("ALICLOUD_REGION")
+}
+
+func testAccPreCheckWithRegions(t *testing.T, supported bool, regions []connectivity.Region) {
+	acctest.PreCheck(t)
+	checkoutSupportedRegions(t, supported, regions)
+	defaultRegionToTest = os.Getenv("ALICLOUD_REGION")
+}
+
+func checkoutSupportedRegions(t *testing.T, supported bool, regions []connectivity.Region) {
+	region := os.Getenv("ALICLOUD_REGION")
+	find := false
+	backupRegion := string(connectivity.APSouthEast1)
+	if region == string(connectivity.APSouthEast1) {
+		backupRegion = string(connectivity.EUCentral1)
+	}
+
+	checkoutRegion := os.Getenv("CHECKOUT_REGION")
+	if checkoutRegion == "true" {
+		if region == string(connectivity.Hangzhou) {
+			region = string(connectivity.EUCentral1)
+			os.Setenv("ALICLOUD_REGION", region)
+		}
+	}
+	backupRegionFind := false
+	hangzhouRegionFind := false
+	for _, r := range regions {
+		if region == string(r) {
+			find = true
+		}
+		if string(r) == backupRegion {
+			backupRegionFind = true
+		}
+		if string(connectivity.Hangzhou) == string(r) {
+			hangzhouRegionFind = true
+		}
+	}
+
+	if (find && !supported) || (!find && supported) {
+		if supported {
+			if backupRegionFind {
+				t.Logf("Skipping unsupported region %s. Supported regions: %s. Using %s as this test region", region, regions, backupRegion)
+				os.Setenv("ALICLOUD_REGION", backupRegion)
+				defaultRegionToTest = backupRegion
+				return
+			}
+			if hangzhouRegionFind {
+				t.Logf("Skipping unsupported region %s. Supported regions: %s. Using %s as this test region", region, regions, connectivity.Hangzhou)
+				os.Setenv("ALICLOUD_REGION", string(connectivity.Hangzhou))
+				defaultRegionToTest = string(connectivity.Hangzhou)
+				return
+			}
+			if len(regions) > 0 {
+				targetRegion := string(regions[0])
+				t.Logf("Skipping unsupported region %s. Supported regions: %s. Using %s as this test region", region, regions, targetRegion)
+				os.Setenv("ALICLOUD_REGION", targetRegion)
+				defaultRegionToTest = targetRegion
+				return
+			}
+			t.Skipf("Skipping unsupported region %s. Supported regions: %s.", region, regions)
+		} else {
+			if !backupRegionFind {
+				t.Logf("Skipping unsupported region %s. Unsupported regions: %s. Using %s as this test region", region, regions, backupRegion)
+				os.Setenv("ALICLOUD_REGION", backupRegion)
+				defaultRegionToTest = backupRegion
+				return
+			}
+			if !hangzhouRegionFind {
+				t.Logf("Skipping unsupported region %s. Unsupported regions: %s. Using %s as this test region", region, regions, connectivity.Hangzhou)
+				os.Setenv("ALICLOUD_REGION", string(connectivity.Hangzhou))
+				defaultRegionToTest = string(connectivity.Hangzhou)
+				return
+			}
+			t.Skipf("Skipping unsupported region %s. Unsupported regions: %s.", region, regions)
+		}
+		t.Skipped()
+	}
+}
+
+// The instance member resource used by the ordering fixture is still owned by
+// the root package, so its describe probe is mirrored here for the destroy check.
+type cloudFirewallInstanceMemberTestService struct {
+	client *connectivity.AliyunClient
+}
+
+func (s *cloudFirewallInstanceMemberTestService) DescribeCloudFirewallInstanceMember(id string) (object map[string]interface{}, err error) {
+	var endpoint string
+	var response map[string]interface{}
+	action := "DescribeInstanceMembers"
+	request := map[string]interface{}{
+		"MemberUid": id,
+	}
+
+	wait := helper.IncrementalWait(3*time.Second, 3*time.Second)
+	err = retry.Retry(5*time.Minute, func() *retry.RetryError {
+		response, err = s.client.RpcPostWithEndpoint("Cloudfw", "2017-12-07", action, nil, request, true, endpoint)
+		if err != nil {
+			if helper.NeedRetry(err) {
+				wait()
+				return retry.RetryableError(err)
+			} else if errs.IsExpectedErrors(err, []string{"not buy user"}) {
+				endpoint = connectivity.CloudFirewallOpenAPIEndpointControlPolicy
+				return retry.RetryableError(err)
+			}
+			return retry.NonRetryableError(err)
+		}
+		logs.AddDebug(action, response, request)
+		return nil
+	})
+	if err != nil {
+		if errs.IsExpectedErrors(err, []string{"InvalidResource.NotFound"}) {
+			return object, errs.WrapErrorf(err, errs.NotFoundMsg, errs.AlibabaCloudSdkGoERROR)
+		}
+		return object, errs.WrapErrorf(err, errs.DefaultErrorMsg, id, action, errs.AlibabaCloudSdkGoERROR)
+	}
+	v, err := jsonpath.Get("$.Members", response)
+	if err != nil {
+		return object, errs.WrapErrorf(err, errs.FailedGetAttributeMsg, id, "$.Members", response)
+	}
+	members := v.([]interface{})
+	if len(members) < 1 {
+		return object, errs.WrapErrorf(err, errs.NotFoundMsg, errs.AlibabaCloudSdkGoERROR)
+	}
+	return members[0].(map[string]interface{}), nil
+}
+
+// Repeating addresses that already exist in state must not plan, while any
+// membership or configured-order change must still plan.
+func TestUnitCloudFirewallAddressBookDuplicateConvergence(t *testing.T) {
+	a, b, c := "192.0.2.1/32", "198.51.100.1/32", "203.0.113.1/32"
+	for _, tc := range []struct {
+		name      string
+		addresses []interface{}
+		changed   bool
+	}{
+		{"duplicate tail", []interface{}{a, b, a}, false},
+		{"duplicate head", []interface{}{a, a, b}, false},
+		{"duplicate middle", []interface{}{a, b, b}, false},
+		{"all duplicated", []interface{}{a, a, b, b, a}, false},
+		{"duplicate with new member", []interface{}{a, a, c}, true},
+		{"duplicate with removed member", []interface{}{a, a}, true},
+		{"configured reorder", []interface{}{b, a, b}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := cloudfirewall.ResourceAddressBook()
+			d := schema.TestResourceDataRaw(t, r.Schema, map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": []interface{}{a, b}})
+			d.SetId("address-book")
+			config := map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": tc.addresses}
+			diff, err := r.Diff(context.Background(), d.State(), sdkterraform.NewResourceConfigRaw(config), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if changed := diff != nil && !diff.Empty(); changed != tc.changed {
+				t.Fatalf("changed=%v want=%v diff=%#v", changed, tc.changed, diff)
+			}
+		})
+	}
+
+	// Without a configured address list the state mirrors the API view, including
+	// its multiplicity. The plan must not rewrite such a computed list.
+	r := cloudfirewall.ResourceAddressBook()
+	d := schema.TestResourceDataRaw(t, r.Schema, map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": []interface{}{a, b, b}})
+	d.SetId("address-book")
+	diff, err := r.Diff(context.Background(), d.State(), sdkterraform.NewResourceConfigRaw(map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test"}), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff != nil && !diff.Empty() {
+		t.Fatalf("an unconfigured address list must keep the API multiplicity, diff=%#v", diff)
+	}
+}
+
+// Both write paths must submit one occurrence per address even when the
+// configuration repeats them.
+func TestUnitCloudFirewallAddressBookWritePathDedupes(t *testing.T) {
+	a, b, c := "192.0.2.1/32", "198.51.100.1/32", "203.0.113.1/32"
+	var created, updated []string
+	client := cloudFirewallAddressBookTestClient(t, []interface{}{a, b}, func(req *http.Request) {
+		if err := req.ParseForm(); err != nil {
+			t.Error(err)
+			return
+		}
+		switch req.Form.Get("Action") {
+		case "AddAddressBook":
+			created = append(created, req.Form.Get("AddressList"))
+		case "ModifyAddressBook":
+			updated = append(updated, req.Form.Get("AddressList"))
+		}
+	})
+	r := cloudfirewall.ResourceAddressBook()
+
+	config := map[string]interface{}{"group_name": "test", "group_type": "ip", "description": "test", "address_list": []interface{}{a, b, a}}
+	diff, err := r.Diff(context.Background(), nil, sdkterraform.NewResourceConfigRaw(config), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff == nil || diff.Empty() {
+		t.Fatal("a new address book with configured addresses must plan")
+	}
+	state, diags := r.Apply(context.Background(), nil, diff, client)
+	if diags.HasError() {
+		t.Fatalf("%v", diags)
+	}
+	if len(created) != 1 || created[0] != a+","+b {
+		t.Fatalf("AddAddressBook AddressList=%q want [%q]", created, a+","+b)
+	}
+
+	config["address_list"] = []interface{}{a, b, a, c}
+	diff, err = r.Diff(context.Background(), state, sdkterraform.NewResourceConfigRaw(config), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff == nil || diff.Empty() {
+		t.Fatal("adding an address must plan")
+	}
+	if _, diags = r.Apply(context.Background(), state, diff, client); diags.HasError() {
+		t.Fatalf("%v", diags)
+	}
+	if len(updated) != 1 || updated[0] != a+","+b+","+c {
+		t.Fatalf("ModifyAddressBook AddressList=%q want [%q]", updated, a+","+b+","+c)
+	}
+}
+
+// The duplicate fix must converge against the real API: the unchanged duplicate
+// configuration plans empty after the first apply, and a reordered duplicate
+// configuration still applies.
+func TestAccAliCloudCloudFirewallAddressBook_addressListDuplicate(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_cloud_firewall_address_book.default"
+	checkoutSupportedRegions(t, true, connectivity.CloudFirewallSupportRegions)
+	ra := resourceAttrInit(resourceId, AliCloudCloudFirewallAddressBookMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return cloudfirewall.NewService(acctest.Provider.Meta().(*connectivity.AliyunClient))
+	}, "DescribeAddressBook")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := tfacctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf-testAcc%scloudfirewalladdressbook%d", defaultRegionToTest, rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudCloudFirewallAddressBookBasicDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories(),
+		CheckDestroy:             rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"group_name":   name,
+					"group_type":   "ip",
+					"description":  name,
+					"address_list": []string{"10.21.0.0/16", "10.22.0.0/16", "10.21.0.0/16"},
+				}),
+				Check: testAccCheck(map[string]string{
+					"address_list.#": "2",
+				}),
+			},
+			{
+				// The second apply of the same configuration must converge: the test
+				// framework fails this step when the post-apply plan is not empty.
+				Config: testAccConfig(map[string]interface{}{
+					"address_list": []string{"10.21.0.0/16", "10.22.0.0/16", "10.21.0.0/16"},
+				}),
+				Check: testAccCheck(map[string]string{
+					"address_list.#": "2",
+				}),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"address_list": []string{"10.22.0.0/16", "10.21.0.0/16", "10.22.0.0/16"},
+				}),
+				Check: testAccCheck(map[string]string{
+					"address_list.#": "2",
+					"address_list.0": "10.22.0.0/16",
+				}),
+			},
+		},
+	})
 }

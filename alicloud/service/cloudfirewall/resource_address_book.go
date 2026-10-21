@@ -1,22 +1,29 @@
-package alicloud
+package cloudfirewall
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/convert"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/errs"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/helper"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/logs"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/validators"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-func resourceAliCloudCloudFirewallAddressBook() *schema.Resource {
+func ResourceAddressBook() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAliCloudCloudFirewallAddressBookCreate,
-		Read:   resourceAliCloudCloudFirewallAddressBookRead,
-		Update: resourceAliCloudCloudFirewallAddressBookUpdate,
-		Delete: resourceAliCloudCloudFirewallAddressBookDelete,
+		Create:        resourceAddressBookCreate,
+		Read:          resourceAddressBookRead,
+		Update:        resourceAddressBookUpdate,
+		Delete:        resourceAddressBookDelete,
+		CustomizeDiff: addressBookCustomizeDiff,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
@@ -29,7 +36,7 @@ func resourceAliCloudCloudFirewallAddressBook() *schema.Resource {
 				Type:         schema.TypeString,
 				Required:     true,
 				ForceNew:     true,
-				ValidateFunc: StringInSlice([]string{"ip", "ipv6", "domain", "port", "tag", "asset", "assetIpv6"}, false),
+				ValidateFunc: validators.StringInSlice([]string{"ip", "ipv6", "domain", "port", "tag", "asset", "assetIpv6"}, false),
 			},
 			"description": {
 				Type:     schema.TypeString,
@@ -38,18 +45,18 @@ func resourceAliCloudCloudFirewallAddressBook() *schema.Resource {
 			"auto_add_tag_ecs": {
 				Type:         schema.TypeInt,
 				Optional:     true,
-				ValidateFunc: IntInSlice([]int{0, 1}),
+				ValidateFunc: validators.IntInSlice([]int{0, 1}),
 			},
 			"tag_relation": {
 				Type:         schema.TypeString,
 				Optional:     true,
 				Computed:     true,
-				ValidateFunc: StringInSlice([]string{"and", "or"}, false),
+				ValidateFunc: validators.StringInSlice([]string{"and", "or"}, false),
 			},
 			"lang": {
 				Type:         schema.TypeString,
 				Optional:     true,
-				ValidateFunc: StringInSlice([]string{"zh", "en"}, false),
+				ValidateFunc: validators.StringInSlice([]string{"zh", "en"}, false),
 			},
 			"address_list": {
 				Type:     schema.TypeList,
@@ -229,7 +236,7 @@ func resourceAliCloudCloudFirewallAddressBook() *schema.Resource {
 	}
 }
 
-var cloudFirewallAddressBookIpv4AssetTypesMap = map[string]string{
+var addressBookIpv4AssetTypesMap = map[string]string{
 	"eip":                     "EIP",
 	"ecs_eip":                 "EcsEIP",
 	"ecs_public_ip":           "EcsPublicIP",
@@ -249,7 +256,7 @@ var cloudFirewallAddressBookIpv4AssetTypesMap = map[string]string{
 	"havip":                   "HAVIP",
 }
 
-var cloudFirewallAddressBookIpv6AssetTypesMap = map[string]string{
+var addressBookIpv6AssetTypesMap = map[string]string{
 	"ecs_ipv6":          "EcsIPv6",
 	"slb_ipv6":          "SlbIPv6",
 	"nlb_ipv6":          "NlbIPv6",
@@ -260,7 +267,7 @@ var cloudFirewallAddressBookIpv6AssetTypesMap = map[string]string{
 	"ai_gateway_eipv6":  "AiGatewayEIPv6",
 }
 
-func expandCloudFirewallAddressBookAssetRegionResourceTypes(configured []interface{}) []map[string]interface{} {
+func expandAddressBookAssetRegionResourceTypes(configured []interface{}) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0)
 	for _, item := range configured {
 		if item == nil {
@@ -281,7 +288,7 @@ func expandCloudFirewallAddressBookAssetRegionResourceTypes(configured []interfa
 			if ipv4List, ok := resourceTypeArg["ipv4"].([]interface{}); ok && len(ipv4List) > 0 && ipv4List[0] != nil {
 				ipv4Arg := ipv4List[0].(map[string]interface{})
 				ipv4Map := make(map[string]interface{})
-				for schemaKey, apiKey := range cloudFirewallAddressBookIpv4AssetTypesMap {
+				for schemaKey, apiKey := range addressBookIpv4AssetTypesMap {
 					if v, ok := ipv4Arg[schemaKey].(bool); ok {
 						ipv4Map[apiKey] = v
 					}
@@ -293,7 +300,7 @@ func expandCloudFirewallAddressBookAssetRegionResourceTypes(configured []interfa
 			if ipv6List, ok := resourceTypeArg["ipv6"].([]interface{}); ok && len(ipv6List) > 0 && ipv6List[0] != nil {
 				ipv6Arg := ipv6List[0].(map[string]interface{})
 				ipv6Map := make(map[string]interface{})
-				for schemaKey, apiKey := range cloudFirewallAddressBookIpv6AssetTypesMap {
+				for schemaKey, apiKey := range addressBookIpv6AssetTypesMap {
 					if v, ok := ipv6Arg[schemaKey].(bool); ok {
 						ipv6Map[apiKey] = v
 					}
@@ -311,7 +318,9 @@ func expandCloudFirewallAddressBookAssetRegionResourceTypes(configured []interfa
 	return result
 }
 
-func flattenCloudFirewallAddressBookAssetRegionResourceTypes(src interface{}) []map[string]interface{} {
+// FlattenAddressBookAssetRegionResourceTypes maps the API asset region resource
+// types onto the schema shape shared by the resource and the data source.
+func FlattenAddressBookAssetRegionResourceTypes(src interface{}) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0)
 	srcList, ok := src.([]interface{})
 	if !ok {
@@ -335,7 +344,7 @@ func flattenCloudFirewallAddressBookAssetRegionResourceTypes(src interface{}) []
 			if ipv4Arg, ok := resourceTypeArg["Ipv4"].(map[string]interface{}); ok {
 				ipv4Map := make(map[string]interface{})
 				ipv4Enabled := false
-				for schemaKey, apiKey := range cloudFirewallAddressBookIpv4AssetTypesMap {
+				for schemaKey, apiKey := range addressBookIpv4AssetTypesMap {
 					if v, ok := ipv4Arg[apiKey]; ok {
 						ipv4Map[schemaKey] = v
 						if enabled, ok := v.(bool); ok && enabled {
@@ -352,7 +361,7 @@ func flattenCloudFirewallAddressBookAssetRegionResourceTypes(src interface{}) []
 			if ipv6Arg, ok := resourceTypeArg["Ipv6"].(map[string]interface{}); ok {
 				ipv6Map := make(map[string]interface{})
 				ipv6Enabled := false
-				for schemaKey, apiKey := range cloudFirewallAddressBookIpv6AssetTypesMap {
+				for schemaKey, apiKey := range addressBookIpv6AssetTypesMap {
 					if v, ok := ipv6Arg[apiKey]; ok {
 						ipv6Map[schemaKey] = v
 						if enabled, ok := v.(bool); ok && enabled {
@@ -375,7 +384,7 @@ func flattenCloudFirewallAddressBookAssetRegionResourceTypes(src interface{}) []
 	return result
 }
 
-func resourceAliCloudCloudFirewallAddressBookCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceAddressBookCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
 	var err error
@@ -400,7 +409,7 @@ func resourceAliCloudCloudFirewallAddressBookCreate(d *schema.ResourceData, meta
 	}
 
 	if v, ok := d.GetOk("address_list"); ok {
-		request["AddressList"] = strings.Join(expandStringList(v.([]interface{})), ",")
+		request["AddressList"] = strings.Join(dedupeAddressList(v.([]interface{})), ",")
 	}
 
 	if v, ok := d.GetOk("ecs_tags"); ok {
@@ -412,31 +421,31 @@ func resourceAliCloudCloudFirewallAddressBookCreate(d *schema.ResourceData, meta
 	}
 
 	if v, ok := d.GetOk("asset_member_uids"); ok {
-		assetMemberUidsJson, err := convertArrayObjectToJsonString(v.([]interface{}))
+		assetMemberUidsJson, err := convert.ConvertArrayObjectToJsonString(v.([]interface{}))
 		if err != nil {
-			return WrapError(err)
+			return errs.WrapError(err)
 		}
 
 		request["AssetMemberUids"] = assetMemberUidsJson
 	}
 
 	if v, ok := d.GetOk("asset_region_resource_types"); ok {
-		assetRegionResourceTypesJson, err := convertArrayObjectToJsonString(expandCloudFirewallAddressBookAssetRegionResourceTypes(v.([]interface{})))
+		assetRegionResourceTypesJson, err := convert.ConvertArrayObjectToJsonString(expandAddressBookAssetRegionResourceTypes(v.([]interface{})))
 		if err != nil {
-			return WrapError(err)
+			return errs.WrapError(err)
 		}
 
 		request["AssetRegionResourceTypes"] = assetRegionResourceTypesJson
 	}
 
-	wait := incrementalWait(3*time.Second, 3*time.Second)
+	wait := helper.IncrementalWait(3*time.Second, 3*time.Second)
 	err = retry.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutCreate)), func() *retry.RetryError {
 		response, err = client.RpcPostWithEndpoint("Cloudfw", "2017-12-07", action, nil, request, false, endpoint)
 		if err != nil {
-			if NeedRetry(err) {
+			if helper.NeedRetry(err) {
 				wait()
 				return retry.RetryableError(err)
-			} else if IsExpectedErrors(err, []string{"not buy user"}) {
+			} else if errs.IsExpectedErrors(err, []string{"not buy user"}) {
 				endpoint = connectivity.CloudFirewallOpenAPIEndpointControlPolicy
 				return retry.RetryableError(err)
 			}
@@ -445,29 +454,29 @@ func resourceAliCloudCloudFirewallAddressBookCreate(d *schema.ResourceData, meta
 
 		return nil
 	})
-	addDebug(action, response, request)
+	logs.AddDebug(action, response, request)
 
 	if err != nil {
-		return WrapErrorf(err, DefaultErrorMsg, "alicloud_cloud_firewall_address_book", action, AlibabaCloudSdkGoERROR)
+		return errs.WrapErrorf(err, errs.DefaultErrorMsg, "alicloud_cloud_firewall_address_book", action, errs.AlibabaCloudSdkGoERROR)
 	}
 
 	d.SetId(fmt.Sprint(response["GroupUuid"]))
 
-	return resourceAliCloudCloudFirewallAddressBookRead(d, meta)
+	return resourceAddressBookRead(d, meta)
 }
 
-func resourceAliCloudCloudFirewallAddressBookRead(d *schema.ResourceData, meta interface{}) error {
+func resourceAddressBookRead(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
-	cloudfwService := CloudfwService{client}
+	service := NewService(client)
 
-	object, err := cloudfwService.DescribeCloudFirewallAddressBook(d.Id())
+	object, err := service.DescribeAddressBook(d.Id())
 	if err != nil {
-		if !d.IsNewResource() && NotFoundError(err) {
-			log.Printf("[DEBUG] Resource alicloud_cloud_firewall_address_book cloudfwService.DescribeCloudFirewallAddressBook Failed!!! %s", err)
+		if !d.IsNewResource() && errs.NotFoundError(err) {
+			log.Printf("[DEBUG] Resource alicloud_cloud_firewall_address_book service.DescribeAddressBook Failed!!! %s", err)
 			d.SetId("")
 			return nil
 		}
-		return WrapError(err)
+		return errs.WrapError(err)
 	}
 
 	d.Set("group_name", object["GroupName"])
@@ -476,9 +485,9 @@ func resourceAliCloudCloudFirewallAddressBookRead(d *schema.ResourceData, meta i
 	d.Set("tag_relation", object["TagRelation"])
 
 	if v, ok := object["AutoAddTagEcs"]; ok {
-		auto_add_tag_ecsVal, err := formatInt(v)
+		auto_add_tag_ecsVal, err := convert.FormatInt(v)
 		if err != nil {
-			return err
+			return errs.WrapError(err)
 		}
 		d.Set("auto_add_tag_ecs", auto_add_tag_ecsVal)
 	}
@@ -487,7 +496,7 @@ func resourceAliCloudCloudFirewallAddressBookRead(d *schema.ResourceData, meta i
 	for _, addressListArg := range object["AddressList"].([]interface{}) {
 		addressListItems = append(addressListItems, fmt.Sprint(addressListArg))
 	}
-	d.Set("address_list", cloudFirewallAddressBookAddressOrder(addressListItems, d.Get("address_list").([]interface{})))
+	d.Set("address_list", addressBookAddressOrder(addressListItems, d.Get("address_list").([]interface{})))
 
 	ecsTags := make([]map[string]interface{}, 0)
 	for _, tagListItem := range object["TagList"].([]interface{}) {
@@ -502,9 +511,9 @@ func resourceAliCloudCloudFirewallAddressBookRead(d *schema.ResourceData, meta i
 	if v, ok := object["AssetMemberUids"].([]interface{}); ok {
 		assetMemberUids := make([]int, 0)
 		for _, assetMemberUid := range v {
-			assetMemberUidValue, err := formatInt(assetMemberUid)
+			assetMemberUidValue, err := convert.FormatInt(assetMemberUid)
 			if err != nil {
-				return err
+				return errs.WrapError(err)
 			}
 			assetMemberUids = append(assetMemberUids, assetMemberUidValue)
 		}
@@ -513,21 +522,21 @@ func resourceAliCloudCloudFirewallAddressBookRead(d *schema.ResourceData, meta i
 	}
 
 	if v, ok := object["AssetRegionResourceTypes"]; ok {
-		d.Set("asset_region_resource_types", flattenCloudFirewallAddressBookAssetRegionResourceTypes(v))
+		d.Set("asset_region_resource_types", FlattenAddressBookAssetRegionResourceTypes(v))
 	}
 
 	if v, ok := object["AddressListCount"]; ok {
-		address_list_countVal, err := formatInt(v)
+		address_list_countVal, err := convert.FormatInt(v)
 		if err != nil {
-			return err
+			return errs.WrapError(err)
 		}
 		d.Set("address_list_count", address_list_countVal)
 	}
 
 	if v, ok := object["ReferenceCount"]; ok {
-		reference_countVal, err := formatInt(v)
+		reference_countVal, err := convert.FormatInt(v)
 		if err != nil {
-			return err
+			return errs.WrapError(err)
 		}
 		d.Set("reference_count", reference_countVal)
 	}
@@ -535,7 +544,7 @@ func resourceAliCloudCloudFirewallAddressBookRead(d *schema.ResourceData, meta i
 	return nil
 }
 
-func resourceAliCloudCloudFirewallAddressBookUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceAddressBookUpdate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	var response map[string]interface{}
 	update := false
@@ -573,7 +582,7 @@ func resourceAliCloudCloudFirewallAddressBookUpdate(d *schema.ResourceData, meta
 	if d.HasChange("address_list") {
 		update = true
 		if v, ok := d.GetOk("address_list"); ok {
-			request["AddressList"] = strings.Join(expandStringList(v.([]interface{})), ",")
+			request["AddressList"] = strings.Join(dedupeAddressList(v.([]interface{})), ",")
 		}
 	}
 
@@ -593,9 +602,9 @@ func resourceAliCloudCloudFirewallAddressBookUpdate(d *schema.ResourceData, meta
 		update = true
 
 		if v, ok := d.GetOk("asset_member_uids"); ok {
-			assetMemberUidsJson, err := convertArrayObjectToJsonString(v.([]interface{}))
+			assetMemberUidsJson, err := convert.ConvertArrayObjectToJsonString(v.([]interface{}))
 			if err != nil {
-				return WrapError(err)
+				return errs.WrapError(err)
 			}
 
 			request["AssetMemberUids"] = assetMemberUidsJson
@@ -606,9 +615,9 @@ func resourceAliCloudCloudFirewallAddressBookUpdate(d *schema.ResourceData, meta
 		update = true
 
 		if v, ok := d.GetOk("asset_region_resource_types"); ok {
-			assetRegionResourceTypesJson, err := convertArrayObjectToJsonString(expandCloudFirewallAddressBookAssetRegionResourceTypes(v.([]interface{})))
+			assetRegionResourceTypesJson, err := convert.ConvertArrayObjectToJsonString(expandAddressBookAssetRegionResourceTypes(v.([]interface{})))
 			if err != nil {
-				return WrapError(err)
+				return errs.WrapError(err)
 			}
 
 			request["AssetRegionResourceTypes"] = assetRegionResourceTypesJson
@@ -627,14 +636,14 @@ func resourceAliCloudCloudFirewallAddressBookUpdate(d *schema.ResourceData, meta
 		action := "ModifyAddressBook"
 		var err error
 		var endpoint string
-		wait := incrementalWait(3*time.Second, 3*time.Second)
+		wait := helper.IncrementalWait(3*time.Second, 3*time.Second)
 		err = retry.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutUpdate)), func() *retry.RetryError {
 			response, err = client.RpcPostWithEndpoint("Cloudfw", "2017-12-07", action, nil, request, false, endpoint)
 			if err != nil {
-				if NeedRetry(err) {
+				if helper.NeedRetry(err) {
 					wait()
 					return retry.RetryableError(err)
-				} else if IsExpectedErrors(err, []string{"not buy user"}) {
+				} else if errs.IsExpectedErrors(err, []string{"not buy user"}) {
 					endpoint = connectivity.CloudFirewallOpenAPIEndpointControlPolicy
 					return retry.RetryableError(err)
 				}
@@ -643,17 +652,17 @@ func resourceAliCloudCloudFirewallAddressBookUpdate(d *schema.ResourceData, meta
 
 			return nil
 		})
-		addDebug(action, response, request)
+		logs.AddDebug(action, response, request)
 
 		if err != nil {
-			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			return errs.WrapErrorf(err, errs.DefaultErrorMsg, d.Id(), action, errs.AlibabaCloudSdkGoERROR)
 		}
 	}
 
-	return resourceAliCloudCloudFirewallAddressBookRead(d, meta)
+	return resourceAddressBookRead(d, meta)
 }
 
-func resourceAliCloudCloudFirewallAddressBookDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceAddressBookDelete(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*connectivity.AliyunClient)
 	action := "DeleteAddressBook"
 	var response map[string]interface{}
@@ -672,14 +681,14 @@ func resourceAliCloudCloudFirewallAddressBookDelete(d *schema.ResourceData, meta
 		request["SourceIp"] = v
 	}
 
-	wait := incrementalWait(3*time.Second, 3*time.Second)
+	wait := helper.IncrementalWait(3*time.Second, 3*time.Second)
 	err = retry.Retry(client.GetRetryTimeout(d.Timeout(schema.TimeoutDelete)), func() *retry.RetryError {
 		response, err = client.RpcPostWithEndpoint("Cloudfw", "2017-12-07", action, nil, request, false, endpoint)
 		if err != nil {
-			if NeedRetry(err) {
+			if helper.NeedRetry(err) {
 				wait()
 				return retry.RetryableError(err)
-			} else if IsExpectedErrors(err, []string{"not buy user"}) {
+			} else if errs.IsExpectedErrors(err, []string{"not buy user"}) {
 				endpoint = connectivity.CloudFirewallOpenAPIEndpointControlPolicy
 				return retry.RetryableError(err)
 			}
@@ -688,10 +697,10 @@ func resourceAliCloudCloudFirewallAddressBookDelete(d *schema.ResourceData, meta
 
 		return nil
 	})
-	addDebug(action, response, request)
+	logs.AddDebug(action, response, request)
 
 	if err != nil {
-		return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+		return errs.WrapErrorf(err, errs.DefaultErrorMsg, d.Id(), action, errs.AlibabaCloudSdkGoERROR)
 	}
 
 	return nil
@@ -700,7 +709,7 @@ func resourceAliCloudCloudFirewallAddressBookDelete(d *schema.ResourceData, meta
 // Cloud Firewall may return addresses in a different order. Retain the current
 // list order for surviving occurrences, then append new occurrences in API
 // order. The API remains authoritative for complete values and multiplicity.
-func cloudFirewallAddressBookAddressOrder(remote []string, previous []interface{}) []string {
+func addressBookAddressOrder(remote []string, previous []interface{}) []string {
 	remaining := make(map[string]int, len(remote))
 	for _, address := range remote {
 		remaining[address]++
@@ -723,4 +732,57 @@ func cloudFirewallAddressBookAddressOrder(remote []string, previous []interface{
 		ordered = append(ordered, address)
 	}
 	return ordered
+}
+
+// dedupeAddressList keeps the first occurrence of every configured address.
+// The API treats the address list as a set of entries, so surplus duplicates
+// carry no meaning and would otherwise create a perpetual diff once Read writes
+// back the API's view of the list.
+func dedupeAddressList(configured []interface{}) []string {
+	addresses := make([]string, 0, len(configured))
+	for _, item := range configured {
+		if address, ok := item.(string); ok {
+			addresses = append(addresses, address)
+		}
+	}
+	return dedupeStrings(addresses)
+}
+
+// helper.Unique also drops empty strings, which would silently rewrite an
+// invalid configuration instead of letting the API reject it.
+func dedupeStrings(addresses []string) []string {
+	seen := make(map[string]struct{}, len(addresses))
+	result := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		if _, ok := seen[address]; ok {
+			continue
+		}
+		seen[address] = struct{}{}
+		result = append(result, address)
+	}
+	return result
+}
+
+// addressBookCustomizeDiff collapses surplus duplicate addresses in the planned
+// list so a configuration that repeats an address converges after the first
+// apply, matching what the write path submits. Reordering, adding or removing
+// members keeps its planned value and still produces a diff, and a list
+// computed from the API view is never rewritten.
+func addressBookCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if !d.NewValueKnown("address_list") || !d.HasChange("address_list") {
+		return nil
+	}
+	planned, ok := d.Get("address_list").([]interface{})
+	if !ok {
+		return nil
+	}
+	addresses := dedupeAddressList(planned)
+	if len(addresses) == len(planned) {
+		return nil
+	}
+	deduped := make([]interface{}, 0, len(addresses))
+	for _, address := range addresses {
+		deduped = append(deduped, address)
+	}
+	return d.SetNew("address_list", deduped)
 }

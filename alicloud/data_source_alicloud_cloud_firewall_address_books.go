@@ -7,6 +7,7 @@ import (
 
 	"github.com/PaesslerAG/jsonpath"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
+	"github.com/aliyun/terraform-provider-alicloud/alicloud/service/cloudfirewall"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -380,7 +381,7 @@ func dataSourceAliCloudCloudFirewallAddressBooksRead(d *schema.ResourceData, met
 		}
 
 		mapping["asset_member_uids"] = assetMemberUids
-		mapping["asset_region_resource_types"] = flattenCloudFirewallAddressBookAssetRegionResourceTypes(object["AssetRegionResourceTypes"])
+		mapping["asset_region_resource_types"] = cloudfirewall.FlattenAddressBookAssetRegionResourceTypes(object["AssetRegionResourceTypes"])
 
 		if v, ok := object["AddressListCount"]; ok {
 			addressListCount, err := formatInt(v)

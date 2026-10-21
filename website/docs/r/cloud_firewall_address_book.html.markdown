@@ -27,8 +27,8 @@ Basic Usage
 
 ```terraform
 resource "alicloud_cloud_firewall_address_book" "example" {
-  description      = "example_value"
-  group_name       = "example_value"
+  description      = "terraform-example"
+  group_name       = "terraform-example"
   group_type       = "tag"
   tag_relation     = "and"
   auto_add_tag_ecs = 0
@@ -53,7 +53,7 @@ The following arguments are supported:
   - `and`: Only the public IP addresses of ECS instances that match all the specified tags can be added to the Address Book.
   - `or`: The public IP addresses of ECS instances that match one of the specified tags can be added to the Address Book.
 * `lang` - (Optional) The language of the content within the request and response. Valid values: `zh`, `en`.
-* `address_list` - (Optional, List) The list of addresses.
+* `address_list` - (Optional, List) The list of addresses. Duplicate addresses are removed (the first occurrence is kept) when the Address Book is created or updated, so listing the same address more than once does not produce a diff after the first apply. Changing the order of the addresses still triggers an update.
 * `ecs_tags` - (Optional, Set) A list of ECS tags. See [`ecs_tags`](#ecs_tags) below.
 * `asset_member_uids` - (Optional, List, Available since v1.286.0) The list of member account UIDs of the asset Address Book.
 * `asset_region_resource_types` - (Optional, List, Available since v1.286.0) The list of regions and asset types of the asset Address Book. See [`asset_region_resource_types`](#asset_region_resource_types) below.
