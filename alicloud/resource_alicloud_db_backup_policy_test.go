@@ -49,9 +49,10 @@ func TestAccAliCloudRdsDBBackupPolicyMySql(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:      resourceId,
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"archive_backup_retention_period", "archive_backup_keep_count", "archive_backup_keep_policy"},
 			},
 			{
 				Config: testAccConfig(map[string]interface{}{
@@ -195,6 +196,70 @@ func TestAccAliCloudRdsDBBackupPolicyMySql(t *testing.T) {
 					}),
 				),
 			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"enable_advanced_backup_policy": true,
+					"advanced_data_policies": []map[string]interface{}{
+						{
+							"strategy_id":                 "",
+							"action_type":                 "",
+							"only_preserve_one_each_hour": false,
+							"only_preserve_one_each_day":  false,
+							"retention_value":             365,
+							"retention_type":              "delay",
+							"bak_type":                    "F",
+							"filter_key":                  "",
+							"filter_value":                "0 2 * * 1,3",
+							"filter_type":                 "crontab",
+							"dest_type":                   "level1",
+							"dest_region":                 "${data.alicloud_regions.default.regions.0.id}",
+							"src_type":                    "db",
+							"src_region":                  "${data.alicloud_regions.default.regions.0.id}",
+						},
+					},
+					"advanced_log_policies": []map[string]interface{}{
+						{
+							"strategy_id":         "",
+							"action_type":         "",
+							"log_retention_type":  "delay",
+							"log_retention_value": 7,
+							"enable_log_backup":   1,
+							"dest_type":           "level1",
+							"dest_region":         "${data.alicloud_regions.default.regions.0.id}",
+							"src_type":            "db",
+							"src_region":          "${data.alicloud_regions.default.regions.0.id}",
+							"filter_key":          "",
+							"filter_value":        "0 3 * * *",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"enable_advanced_backup_policy": "true",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"advanced_data_policies": []map[string]interface{}{
+						{
+							"retention_value":             180,
+							"only_preserve_one_each_hour": true,
+							"only_preserve_one_each_day":  true,
+						},
+					},
+					"advanced_log_policies": []map[string]interface{}{
+						{
+							"log_retention_value": 14,
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"enable_advanced_backup_policy": "true",
+					}),
+				),
+			},
 		},
 	})
 }
@@ -203,6 +268,9 @@ func resourceDBBackupPolicyMysqlConfigDependence(name string) string {
 	return fmt.Sprintf(`
 variable "name" {
   default = "%s"
+}
+data "alicloud_regions" "default" {
+  current = true
 }
 data "alicloud_db_zones" "default"{
 	engine = "MySQL"

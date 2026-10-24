@@ -956,7 +956,7 @@ func (s *RdsService) ReleaseDBPublicConnection(instanceId, connection string) er
 	return nil
 }
 
-func (s *RdsService) ModifyDBBackupPolicy(d *schema.ResourceData, updateForData, updateForLog bool) error {
+func (s *RdsService) ModifyDBBackupPolicy(d *schema.ResourceData, updateForData, updateForLog, updateForAdvanced bool) error {
 	enableBackupLog := "1"
 	backupPeriod := ""
 	if v, ok := d.GetOk("preferred_backup_period"); ok && v.(*schema.Set).Len() > 0 {
@@ -1167,6 +1167,140 @@ func (s *RdsService) ModifyDBBackupPolicy(d *schema.ResourceData, updateForData,
 		addDebug(action, response, request)
 		if err := s.WaitForDBInstance(d.Id(), Running, DefaultTimeoutMedium); err != nil {
 			return WrapError(err)
+		}
+	}
+	if updateForAdvanced {
+		client := s.client
+		action := "ModifyBackupPolicy"
+		enableAdvancedBackupPolicy := 0
+		if v, ok := d.GetOkExists("enable_advanced_backup_policy"); ok && v.(bool) {
+			enableAdvancedBackupPolicy = 1
+		}
+		// The advanced backup policy is not scoped by BackupPolicyMode, so the call
+		// carries only the advanced parameters.
+		request := map[string]interface{}{
+			"RegionId":                   s.client.RegionId,
+			"DBInstanceId":               d.Id(),
+			"SourceIp":                   s.client.SourceIp,
+			"EnableAdvancedBackupPolicy": enableAdvancedBackupPolicy,
+		}
+		if v, ok := d.GetOk("advanced_data_policies"); ok {
+			for i, item := range v.([]interface{}) {
+				policy, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				index := i + 1
+				if value := policy["strategy_id"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.StrategyId", index)] = value
+				}
+				if value := policy["action_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.ActionType", index)] = value
+				}
+				if value := policy["only_preserve_one_each_hour"].(bool); value {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.OnlyPreserveOneEachHour", index)] = value
+				}
+				if value := policy["only_preserve_one_each_day"].(bool); value {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.OnlyPreserveOneEachDay", index)] = value
+				}
+				if value := policy["retention_value"].(int); value != 0 {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.RetentionValue", index)] = value
+				}
+				if value := policy["retention_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.RetentionType", index)] = value
+				}
+				if value := policy["bak_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.BakType", index)] = value
+				}
+				if value := policy["filter_key"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.FilterKey", index)] = value
+				}
+				if value := policy["filter_value"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.FilterValue", index)] = value
+				}
+				if value := policy["filter_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.FilterType", index)] = value
+				}
+				if value := policy["dest_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.DestType", index)] = value
+				}
+				if value := policy["dest_region"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.DestRegion", index)] = value
+				}
+				if value := policy["src_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.SrcType", index)] = value
+				}
+				if value := policy["src_region"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedDataPolicies.%d.SrcRegion", index)] = value
+				}
+			}
+		}
+		if v, ok := d.GetOk("advanced_log_policies"); ok {
+			for i, item := range v.([]interface{}) {
+				policy, ok := item.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				index := i + 1
+				if value := policy["strategy_id"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.StrategyId", index)] = value
+				}
+				if value := policy["action_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.ActionType", index)] = value
+				}
+				if value := policy["log_retention_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.LogRetentionType", index)] = value
+				}
+				if value := policy["log_retention_value"].(int); value != 0 {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.LogRetentionValue", index)] = value
+				}
+				if value := policy["enable_log_backup"].(int); value != 0 {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.EnableLogBackup", index)] = value
+				}
+				if value := policy["dest_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.DestType", index)] = value
+				}
+				if value := policy["dest_region"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.DestRegion", index)] = value
+				}
+				if value := policy["src_type"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.SrcType", index)] = value
+				}
+				if value := policy["src_region"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.SrcRegion", index)] = value
+				}
+				if value := policy["filter_key"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.FilterKey", index)] = value
+				}
+				if value := policy["filter_value"].(string); value != "" {
+					request[fmt.Sprintf("AdvancedLogPolicies.%d.FilterValue", index)] = value
+				}
+			}
+		}
+		response, err := client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
+		if err != nil {
+			return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+		}
+		addDebug(action, response, request)
+		if err := s.WaitForDBInstance(d.Id(), Running, DefaultTimeoutMedium); err != nil {
+			return WrapError(err)
+		}
+		if enableAdvancedBackupPolicy == 1 {
+			// The switch is asynchronous; give it a bounded window before the
+			// following Read reports whether it actually took effect.
+			stateConf := BuildStateConf([]string{}, []string{"true"}, 2*time.Minute, 10*time.Second, func() (interface{}, string, error) {
+				object, err := s.DescribeBackupPolicy(d.Id())
+				if err != nil {
+					return nil, "", WrapError(err)
+				}
+				if enabled, ok := object["AdvancedBackupPolicyEnabled"].(bool); ok && enabled {
+					return object, "true", nil
+				}
+				return object, "false", nil
+			})
+			if _, err := stateConf.WaitForState(); err != nil {
+				return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+			}
 		}
 	}
 	return nil

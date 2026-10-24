@@ -1,6 +1,7 @@
 package alicloud
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -211,6 +212,154 @@ func resourceAlicloudDBBackupPolicy() *schema.Resource {
 				Computed:     true,
 				ValidateFunc: StringInSlice([]string{"Physical", "Snapshot"}, false),
 			},
+			"enable_advanced_backup_policy": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Computed: true,
+			},
+			"advanced_data_policies": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"strategy_id": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"action_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"only_preserve_one_each_hour": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Computed: true,
+						},
+						"only_preserve_one_each_day": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Computed: true,
+						},
+						"retention_value": {
+							Type:     schema.TypeInt,
+							Optional: true,
+							Computed: true,
+						},
+						"retention_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"bak_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"filter_key": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"filter_value": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"filter_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"dest_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"dest_region": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"src_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"src_region": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+					},
+				},
+			},
+			"advanced_log_policies": {
+				Type:     schema.TypeList,
+				Optional: true,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"strategy_id": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"action_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"log_retention_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"log_retention_value": {
+							Type:     schema.TypeInt,
+							Optional: true,
+							Computed: true,
+						},
+						"enable_log_backup": {
+							Type:     schema.TypeInt,
+							Optional: true,
+							Computed: true,
+						},
+						"dest_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"dest_region": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"src_type": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"src_region": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"filter_key": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+						"filter_value": {
+							Type:     schema.TypeString,
+							Optional: true,
+							Computed: true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -299,26 +448,129 @@ func resourceAlicloudDBBackupPolicyRead(d *schema.ResourceData, meta interface{}
 	}
 	d.Set("log_backup_frequency", object["LogBackupFrequency"])
 	d.Set("compress_type", object["CompressType"])
-	archive_backup_retention_periodVal, err := formatInt(object["ArchiveBackupRetentionPeriod"])
-	if err != nil {
-		return err
+	// Archive backup is only supported on MySQL local disks. Other instance families
+	// ignore the archive parameters, so reading the API defaults back would report
+	// values the resource never applied.
+	if instance["Engine"] == "MySQL" && instance["DBInstanceStorageType"] == "local_ssd" {
+		archive_backup_retention_periodVal, err := formatInt(object["ArchiveBackupRetentionPeriod"])
+		if err != nil {
+			return err
+		}
+		d.Set("archive_backup_retention_period", archive_backup_retention_periodVal)
+		archive_backup_keep_countVal, err := formatInt(object["ArchiveBackupKeepCount"])
+		if err != nil {
+			return err
+		}
+		d.Set("archive_backup_keep_count", archive_backup_keep_countVal)
+		d.Set("archive_backup_keep_policy", object["ArchiveBackupKeepPolicy"])
+		if v, ok := object["EnableIncrementDataBackup"].(bool); ok && v {
+			d.Set("inc_backup_interval", object["IncBackupInterval"])
+		}
 	}
-	d.Set("archive_backup_retention_period", archive_backup_retention_periodVal)
-	archive_backup_keep_countVal, err := formatInt(object["ArchiveBackupKeepCount"])
-	if err != nil {
-		return err
-	}
-	d.Set("archive_backup_keep_count", archive_backup_keep_countVal)
-	d.Set("archive_backup_keep_policy", object["ArchiveBackupKeepPolicy"])
-	if instance["Engine"] == "MySQL" && instance["DBInstanceStorageType"] == "local_ssd" && object["EnableIncrementDataBackup"].(bool) {
-		d.Set("inc_backup_interval", object["IncBackupInterval"])
-	}
-	if instance["Engine"] == "MySQL" && object["EnableBackupLog"] == "1" {
+	// EnableBackupLog may be reported as 0 right after it is switched on, while
+	// EnablePitrProtection is still returned; gate only on MySQL so apply and
+	// import read the same value.
+	if instance["Engine"] == "MySQL" {
 		if v, ok := object["EnablePitrProtection"]; ok && v != nil {
 			d.Set("enable_pitr_protection", v.(bool))
 		}
 	}
+	if v, ok := object["AdvancedBackupPolicyEnabled"].(bool); ok {
+		d.Set("enable_advanced_backup_policy", v)
+	}
+	d.Set("advanced_data_policies", flattenRdsAdvancedDataPolicies(object["AdvancedDataPolicies"]))
+	d.Set("advanced_log_policies", flattenRdsAdvancedLogPolicies(object["AdvancedLogPolicies"]))
 	return nil
+}
+
+func flattenRdsAdvancedDataPolicies(raw interface{}) []map[string]interface{} {
+	object, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	list, ok := object["AdvancedDataPolicy"].([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]interface{}, 0, len(list))
+	for _, item := range list {
+		policy, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		result = append(result, map[string]interface{}{
+			"strategy_id":                 rdsFormatString(policy["StrategyId"]),
+			"action_type":                 rdsFormatString(policy["ActionType"]),
+			"only_preserve_one_each_hour": rdsFormatBool(policy["OnlyPreserveOneEachHour"]),
+			"only_preserve_one_each_day":  rdsFormatBool(policy["OnlyPreserveOneEachDay"]),
+			"retention_value":             rdsFormatInt(policy["RetentionValue"]),
+			"retention_type":              rdsFormatString(policy["RetentionType"]),
+			"bak_type":                    rdsFormatString(policy["BakType"]),
+			"filter_key":                  rdsFormatString(policy["FilterKey"]),
+			"filter_value":                rdsFormatString(policy["FilterValue"]),
+			"filter_type":                 rdsFormatString(policy["FilterType"]),
+			"dest_type":                   rdsFormatString(policy["DestType"]),
+			"dest_region":                 rdsFormatString(policy["DestRegion"]),
+			"src_type":                    rdsFormatString(policy["SrcType"]),
+			"src_region":                  rdsFormatString(policy["SrcRegion"]),
+		})
+	}
+	return result
+}
+
+func flattenRdsAdvancedLogPolicies(raw interface{}) []map[string]interface{} {
+	object, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	list, ok := object["AdvancedLogPolicy"].([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]interface{}, 0, len(list))
+	for _, item := range list {
+		policy, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		result = append(result, map[string]interface{}{
+			"strategy_id":         rdsFormatString(policy["StrategyId"]),
+			"action_type":         rdsFormatString(policy["ActionType"]),
+			"log_retention_type":  rdsFormatString(policy["LogRetentionType"]),
+			"log_retention_value": rdsFormatInt(policy["LogRetentionValue"]),
+			"enable_log_backup":   rdsFormatInt(policy["EnableLogBackup"]),
+			"dest_type":           rdsFormatString(policy["DestType"]),
+			"dest_region":         rdsFormatString(policy["DestRegion"]),
+			"src_type":            rdsFormatString(policy["SrcType"]),
+			"src_region":          rdsFormatString(policy["SrcRegion"]),
+			"filter_key":          rdsFormatString(policy["FilterKey"]),
+			"filter_value":        rdsFormatString(policy["FilterValue"]),
+		})
+	}
+	return result
+}
+
+func rdsFormatString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprint(v)
+}
+
+func rdsFormatBool(v interface{}) bool {
+	b, _ := v.(bool)
+	return b
+}
+
+func rdsFormatInt(v interface{}) int {
+	i, err := formatInt(v)
+	if err != nil {
+		return 0
+	}
+	return i
 }
 
 func resourceAlicloudDBBackupPolicyUpdate(d *schema.ResourceData, meta interface{}) error {
@@ -326,6 +578,7 @@ func resourceAlicloudDBBackupPolicyUpdate(d *schema.ResourceData, meta interface
 	rdsService := RdsService{client}
 	updateForData := false
 	updateForLog := false
+	updateForAdvanced := false
 
 	if d.HasChanges("backup_period", "backup_time", "retention_period", "preferred_backup_period", "preferred_backup_time",
 		"backup_retention_period", "compress_type", "log_backup_frequency", "archive_backup_retention_period", "archive_backup_keep_count",
@@ -339,16 +592,20 @@ func resourceAlicloudDBBackupPolicyUpdate(d *schema.ResourceData, meta interface
 		updateForLog = true
 	}
 
+	if d.HasChanges("enable_advanced_backup_policy", "advanced_data_policies", "advanced_log_policies") {
+		updateForAdvanced = true
+	}
+
 	if _, ok := d.GetOkExists("enable_backup_log"); ok {
 		updateForLog = true
 	}
-	if updateForData || updateForLog {
+	if updateForData || updateForLog || updateForAdvanced {
 		// wait instance running before modifying
 		if err := rdsService.WaitForDBInstance(d.Id(), Running, DefaultTimeoutMedium); err != nil {
 			return WrapError(err)
 		}
 		if err := retry.Retry(5*time.Minute, func() *retry.RetryError {
-			if err := rdsService.ModifyDBBackupPolicy(d, updateForData, updateForLog); err != nil {
+			if err := rdsService.ModifyDBBackupPolicy(d, updateForData, updateForLog, updateForAdvanced); err != nil {
 				if IsExpectedErrors(err, OperationDeniedDBStatus) || NeedRetry(err) {
 					return retry.RetryableError(err)
 				}

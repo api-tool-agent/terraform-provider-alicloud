@@ -135,6 +135,49 @@ The following arguments are supported:
 
   -> **NOTE:** Currently, the SQLServer instance does not support to modify `log_backup_retention_period`.
 
+* `enable_advanced_backup_policy` - (Optional, Bool, Available since v1.295.0) Specifies whether to enable the advanced backup policy (sparse backup). Valid values: `true`, `false`. When set to `true`, the advanced data backup policies and advanced log backup policies are applied at the same time.
+
+  -> **NOTE:** The instance must have been switched to the advanced backup policy and must not be an RDS MySQL 5.7 Basic Edition instance or an instance with cold archive storage enabled. The switch is a one-way operation performed in the RDS console.
+
+* `advanced_data_policies` - (Optional, List, Available since v1.295.0) The advanced data backup policies. See [`advanced_data_policies`](#advanced_data_policies) below.
+
+* `advanced_log_policies` - (Optional, List, Available since v1.295.0) The advanced log backup policies. See [`advanced_log_policies`](#advanced_log_policies) below.
+
+### `advanced_data_policies`
+
+The `advanced_data_policies` block supports the following:
+
+* `strategy_id` - (Optional) The ID of the backup policy.
+* `action_type` - (Optional) The action type of the backup policy.
+* `only_preserve_one_each_hour` - (Optional, Bool) Specifies whether to keep only one backup set per hour.
+* `only_preserve_one_each_day` - (Optional, Bool) Specifies whether to keep only one backup set per day.
+* `retention_value` - (Optional, Int) The retention days of the backup set. Valid values: `7-7300`.
+* `retention_type` - (Optional) The retention type of the backup set. Valid values: `never`, `delay`.
+* `bak_type` - (Optional) The backup type. Defaults to `F`.
+* `filter_key` - (Optional) The key of the backup policy filter.
+* `filter_value` - (Optional) The value of the backup policy filter, for example a crontab expression.
+* `filter_type` - (Optional) The type of the backup policy filter. Defaults to `crontab`.
+* `dest_type` - (Optional) The destination type. Defaults to `level1`.
+* `dest_region` - (Optional) The destination region of the backup set.
+* `src_type` - (Optional) The source type. Defaults to `db`.
+* `src_region` - (Optional) The source region of the backup policy.
+
+### `advanced_log_policies`
+
+The `advanced_log_policies` block supports the following:
+
+* `strategy_id` - (Optional) The ID of the log backup policy.
+* `action_type` - (Optional) The action type of the log backup policy.
+* `log_retention_type` - (Optional) The retention type of the log backup set. Valid values: `never`, `delay`.
+* `log_retention_value` - (Optional, Int) The retention days of the log backup set.
+* `enable_log_backup` - (Optional, Int) Specifies whether to enable log backup. Valid values: `0`, `1`.
+* `dest_type` - (Optional) The destination type. Defaults to `level1`.
+* `dest_region` - (Optional) The destination region of the log backup set.
+* `src_type` - (Optional) The source type. Defaults to `db`.
+* `src_region` - (Optional) The source region of the log backup policy.
+* `filter_key` - (Optional) The key of the log backup policy filter.
+* `filter_value` - (Optional) The value of the log backup policy filter, for example a crontab expression.
+
 ## Attributes Reference
 
 The following attributes are exported:
