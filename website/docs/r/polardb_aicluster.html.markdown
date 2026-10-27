@@ -64,6 +64,7 @@ The following arguments are supported:
 * `model_name` - (Optional, ForceNew) The model name. Example: `Qwen3.5-9B`.
 * `capacity` - (Optional, ForceNew, Available since v2.2.0) The initial model capacity of the AI cluster. The capacity unit `1000` equals one L20N equivalent GPU. `storage_type` is required when `capacity` is specified.
 * `storage_type` - (Optional, ForceNew, Available since v2.2.0) The storage type of the AI cluster. Example: `essdpl0`.
+* `storage_space` - (Optional, ForceNew, Available since v2.2.0) The storage space of the AI cluster in GB. `storage_type` and `storage_space` are required when `capacity` is specified.
 * `model_space` - (Optional, ForceNew, Available since v2.2.0) The model operator space of the AI cluster. Example: `pms-xxx`.
 * `create_public_endpoint` - (Optional, ForceNew, Available since v2.2.0) Specifies whether to create a public endpoint for the AI cluster. Example: `ON`.
 * `extension` - (Optional, ForceNew) The extension type. Valid values: `maas`, `custom`.

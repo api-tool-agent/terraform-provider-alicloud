@@ -119,6 +119,12 @@ func resourceAlicloudPolarDBAICluster() *schema.Resource {
 				ForceNew:    true,
 				Description: "The storage type of the AI cluster. It is required when `capacity` is specified. Example: `essdpl0`.",
 			},
+			"storage_space": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "The storage space of the AI cluster in GB. It is required when `capacity` is specified.",
+			},
 			"model_space": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -243,6 +249,9 @@ func resourceAlicloudPolarDBAIClusterCreate(d *schema.ResourceData, meta interfa
 	}
 	if v, ok := d.GetOk("storage_type"); ok {
 		request["StorageType"] = v.(string)
+	}
+	if v, ok := d.GetOk("storage_space"); ok {
+		request["StorageSpace"] = v.(int)
 	}
 	if v, ok := d.GetOk("model_space"); ok {
 		request["ModelSpace"] = v.(string)
