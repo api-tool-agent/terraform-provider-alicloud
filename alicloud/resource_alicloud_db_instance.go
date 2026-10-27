@@ -171,6 +171,28 @@ func resourceAliCloudDBInstance() *schema.Resource {
 				Computed: true,
 				Optional: true,
 			},
+			"db_instance_ip_arrays": {
+				Type:     schema.TypeSet,
+				Optional: true,
+				MaxItems: 51,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"name": {
+							Type:     schema.TypeString,
+							Required: true,
+						},
+						"attribute": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"security_ips": {
+							Type:     schema.TypeSet,
+							Required: true,
+							Elem:     &schema.Schema{Type: schema.TypeString},
+						},
+					},
+				},
+			},
 			"db_instance_ip_array_name": {
 				Type:             schema.TypeString,
 				Optional:         true,
@@ -1754,6 +1776,11 @@ func resourceAliCloudDBInstanceUpdate(d *schema.ResourceData, meta interface{}) 
 			return WrapErrorf(err, IdMsg, d.Id())
 		}
 	}
+	if d.HasChange("db_instance_ip_arrays") {
+		if err := modifyDBInstanceIpArrays(d, meta); err != nil {
+			return WrapError(err)
+		}
+	}
 	if !d.IsNewResource() && d.HasChange("resource_group_id") {
 		action := "ModifyResourceGroup"
 		request := map[string]interface{}{
@@ -2234,6 +2261,15 @@ func resourceAliCloudDBInstanceRead(d *schema.ResourceData, meta interface{}) er
 	d.Set("monitoring_period", monitoringPeriod)
 
 	d.Set("security_ips", ips)
+	ipArrays := make([]map[string]interface{}, 0)
+	if len(d.Get("db_instance_ip_arrays").(*schema.Set).List()) > 0 {
+		apiIpArrays, err := rdsService.DescribeDBSecurityIps(d.Id())
+		if err != nil {
+			return WrapError(err)
+		}
+		ipArrays = flattenDBInstanceIpArrays(apiIpArrays, dbInstanceIpArrayName)
+	}
+	d.Set("db_instance_ip_arrays", ipArrays)
 	d.Set("db_instance_ip_array_name", d.Get("db_instance_ip_array_name"))
 	d.Set("db_instance_ip_array_attribute", d.Get("db_instance_ip_array_attribute"))
 	d.Set("db_instance_type", instance["DBInstanceType"])
@@ -2865,4 +2901,80 @@ func ConvertMySQLInstanceOptimizedWritesResponse(source string) string {
 	default:
 		return source
 	}
+}
+
+func modifyDBInstanceIpArrays(d *schema.ResourceData, meta interface{}) error {
+	client := meta.(*connectivity.AliyunClient)
+	rdsService := RdsService{client}
+	groups := d.Get("db_instance_ip_arrays").(*schema.Set).List()
+	if len(groups) == 0 {
+		return nil
+	}
+
+	request := map[string]interface{}{
+		"RegionId":     client.RegionId,
+		"DBInstanceId": d.Id(),
+		"BatchMode":    "true",
+		"SourceIp":     client.SourceIp,
+	}
+	for index, item := range groups {
+		group := item.(map[string]interface{})
+		request[fmt.Sprintf("GroupItems.%d.GroupName", index+1)] = group["name"].(string)
+		if v, ok := group["attribute"].(string); ok && v != "" {
+			request[fmt.Sprintf("GroupItems.%d.GroupTag", index+1)] = v
+		}
+		ipList := expandStringList(group["security_ips"].(*schema.Set).List())
+		request[fmt.Sprintf("GroupItems.%d.SecurityIPList", index+1)] = strings.Join(ipList, COMMA_SEPARATED)
+	}
+
+	action := "ModifySecurityIps"
+	var response map[string]interface{}
+	var err error
+	wait := incrementalWait(3*time.Second, 3*time.Second)
+	err = retry.Retry(d.Timeout(schema.TimeoutUpdate), func() *retry.RetryError {
+		response, err = client.RpcPost("Rds", "2014-08-15", action, nil, request, false)
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return retry.RetryableError(err)
+			}
+			return retry.NonRetryableError(err)
+		}
+		return nil
+	})
+	if err != nil {
+		return WrapErrorf(err, DefaultErrorMsg, d.Id(), action, AlibabaCloudSdkGoERROR)
+	}
+	addDebug(action, response, request)
+
+	stateConf := BuildStateConf([]string{}, []string{"Running"}, d.Timeout(schema.TimeoutUpdate), 1*time.Second, rdsService.RdsDBInstanceStateRefreshFunc(d.Id(), []string{"Deleting"}))
+	if _, err := stateConf.WaitForState(); err != nil {
+		return WrapErrorf(err, IdMsg, d.Id())
+	}
+	return nil
+}
+
+func flattenDBInstanceIpArrays(ipArrays []interface{}, excludeName string) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(ipArrays))
+	for _, item := range ipArrays {
+		ipArray, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := ipArray["DBInstanceIPArrayName"].(string)
+		if name == "" || name == excludeName {
+			continue
+		}
+		ipList := make([]string, 0)
+		if v, ok := ipArray["SecurityIPList"].(string); ok && v != "" {
+			ipList = strings.Split(v, COMMA_SEPARATED)
+		}
+		attribute, _ := ipArray["DBInstanceIPArrayAttribute"].(string)
+		result = append(result, map[string]interface{}{
+			"name":         name,
+			"attribute":    attribute,
+			"security_ips": ipList,
+		})
+	}
+	return result
 }

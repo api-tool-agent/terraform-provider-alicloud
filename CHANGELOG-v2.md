@@ -1,5 +1,9 @@
 ## 2.2.0 (Unreleased)
 
+ENHANCEMENTS:
+
+- `alicloud_db_instance`: support managing multiple IP whitelist groups in one instance via the `db_instance_ip_arrays` parameter.
+
 ## 2.1.0 (October 22, 2026)
 
 FEATURES:

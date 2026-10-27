@@ -527,6 +527,62 @@ resource "alicloud_db_instance" "example" {
 
 ```
 
+### Create a RDS MySQL instance with multiple whitelist groups
+
+```terraform
+variable "name" {
+  default = "tf-example"
+}
+
+data "alicloud_db_zones" "example" {
+  engine                   = "MySQL"
+  engine_version           = "8.0"
+  instance_charge_type     = "PostPaid"
+  category                 = "HighAvailability"
+  db_instance_storage_type = "cloud_essd"
+}
+
+data "alicloud_db_instance_classes" "example" {
+  zone_id                  = data.alicloud_db_zones.example.zones.0.zone_id
+  engine                   = "MySQL"
+  engine_version           = "8.0"
+  category                 = "HighAvailability"
+  db_instance_storage_type = "cloud_essd"
+  instance_charge_type     = "PostPaid"
+}
+
+data "alicloud_vpcs" "default" {
+  name_regex = "^default-NODELETING$"
+}
+
+data "alicloud_vswitches" "default" {
+  vpc_id = data.alicloud_vpcs.default.ids.0
+}
+
+resource "alicloud_db_instance" "example" {
+  engine                   = "MySQL"
+  engine_version           = "8.0"
+  db_instance_storage_type = "cloud_essd"
+  instance_type            = data.alicloud_db_instance_classes.example.instance_classes.0.instance_class
+  instance_storage         = data.alicloud_db_instance_classes.example.instance_classes.0.storage_range.min
+  instance_charge_type     = "PostPaid"
+  vswitch_id               = data.alicloud_vswitches.default.ids.0
+  security_ips             = ["10.0.0.1"]
+
+  db_instance_ip_arrays = [
+    {
+      name         = "office"
+      attribute    = "office network"
+      security_ips = ["10.10.10.0/24"]
+    },
+    {
+      name         = "partner"
+      security_ips = ["172.16.0.0/24", "192.168.1.10"]
+    },
+  ]
+}
+```
+
 ### Deleting `alicloud_db_instance` or removing it from your configuration
 
 By default, the `alicloud_db_instance` resource cannot destroy a `Prepaid` (Subscription) DB instance. Deleting the resource or removing it from your configuration will remove it from the state file and management, but will not destroy the DB Instance. You can resume managing the subscription db instance via the AlibabaCloud Console.
@@ -622,6 +678,9 @@ The following arguments are supported:
 * `db_instance_ip_array_attribute` - (Optional, Available since v1.125.0) The attribute of the IP address whitelist. By default, this parameter is empty.
 
   -> **NOTE:** The IP address whitelists that have the hidden attribute are not displayed in the ApsaraDB RDS console. These IP address whitelists are used to access Alibaba Cloud services, such as Data Transmission Service (DTS).
+* `db_instance_ip_arrays` - (Optional, Available since v2.2.0) A list of IP address whitelist groups of the instance. Each block manages one whitelist group and supports creating or updating multiple groups in a single apply. See [`db_instance_ip_arrays`](#db_instance_ip_arrays) below.
+
+  -> **NOTE:** This parameter requires the RDS `ModifySecurityIps` batch mode (`BatchMode` and `GroupItems`). It can only be used after the batch parameters are available in the target environment. The group managed by `security_ips` and `db_instance_ip_array_name` is excluded from `db_instance_ip_arrays`.
 * `security_ip_type` - (Optional, Available since v1.125.0) The type of IP address in the IP address whitelist.
 * `db_is_ignore_case` - (Optional, Available since v1.168.0) Specifies whether table names on the instance are case-sensitive. Valid values: `true`, `false`.
   * `true` - Table names are not case-sensitive. This is the default value.
@@ -854,6 +913,14 @@ The following arguments are supported:
   - No
 
 * `db_param_group_id` - (Optional, Available since v1.222.0) Parameter template ID. Only MySQL and PostgreSQL support this parameter. If this parameter is not specified, the default parameter template is used. You can also customize a parameter template and use it here.
+
+### `db_instance_ip_arrays`
+
+The db_instance_ip_arrays mapping supports the following:
+
+* `name` - (Required) The name of the IP address whitelist group.
+* `attribute` - (Optional) The attribute of the IP address whitelist group.
+* `security_ips` - (Required) The IP addresses in the group. The formats are the same as those of `security_ips`.
 
 ### `parameters`
 

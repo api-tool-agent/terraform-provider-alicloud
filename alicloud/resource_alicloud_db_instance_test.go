@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/stretchr/testify/assert"
 )
 
 func init() {
@@ -4809,4 +4811,112 @@ func TestUnitParseDBInstanceParamGroupId(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUnitAliCloudDBInstanceFlattenIpArrays(t *testing.T) {
+	input := []interface{}{
+		map[string]interface{}{
+			"DBInstanceIPArrayName":      "default",
+			"DBInstanceIPArrayAttribute": "",
+			"SecurityIPList":             "10.0.0.1",
+		},
+		map[string]interface{}{
+			"DBInstanceIPArrayName":      "office",
+			"DBInstanceIPArrayAttribute": "office network",
+			"SecurityIPList":             "10.10.10.0/24,10.10.11.0/24",
+		},
+		map[string]interface{}{
+			"DBInstanceIPArrayName":      "partner",
+			"DBInstanceIPArrayAttribute": "",
+			"SecurityIPList":             "",
+		},
+	}
+
+	got := flattenDBInstanceIpArrays(input, "default")
+	assert.Equal(t, 2, len(got))
+	assert.Equal(t, "office", got[0]["name"])
+	assert.Equal(t, "office network", got[0]["attribute"])
+	assert.Equal(t, []string{"10.10.10.0/24", "10.10.11.0/24"}, got[0]["security_ips"])
+	assert.Equal(t, "partner", got[1]["name"])
+	assert.Equal(t, "", got[1]["attribute"])
+	assert.Equal(t, []string{}, got[1]["security_ips"])
+
+	assert.Equal(t, 0, len(flattenDBInstanceIpArrays(nil, "default")))
+}
+
+func TestAccAliCloudDBInstance_ipArrays(t *testing.T) {
+	testAccPreCheck(t)
+	if os.Getenv("ALICLOUD_DB_INSTANCE_IP_ARRAYS_SUPPORTED") != "true" {
+		t.Skip("skip acc test: RDS ModifySecurityIps batch mode (BatchMode/GroupItems) is not released in the target environment")
+	}
+
+	var instance map[string]interface{}
+	resourceId := "alicloud_db_instance.default"
+	ra := resourceAttrInit(resourceId, instanceBasicMap)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &instance, func() interface{} {
+		return &RdsService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeDBInstance")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	name := fmt.Sprintf("tf-testacc-dbinstance-iparrays-%d", rand.Intn(100000))
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, resourceDBInstanceConfigDependence)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		ProviderFactories: testAccProviderFactory,
+		CheckDestroy:      rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"engine":                   "MySQL",
+					"engine_version":           "8.0",
+					"instance_type":            "mysql.n1e.small.1",
+					"instance_storage":         "20",
+					"instance_charge_type":     "Postpaid",
+					"db_instance_storage_type": "cloud_ssd",
+					"instance_name":            "${var.name}",
+					"vswitch_id":               "${local.vswitch_id}",
+					"security_ips":             []string{"10.0.0.1"},
+					"db_instance_ip_arrays": []map[string]interface{}{
+						{
+							"name":         "office",
+							"attribute":    "office network",
+							"security_ips": []string{"10.10.10.0/24"},
+						},
+						{
+							"name":         "partner",
+							"security_ips": []string{"172.16.0.0/24", "192.168.1.10"},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"db_instance_ip_arrays.#": "2",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"db_instance_ip_arrays": []map[string]interface{}{
+						{
+							"name":         "office-v2",
+							"attribute":    "office network v2",
+							"security_ips": []string{"10.10.10.0/24", "10.10.12.0/24"},
+						},
+						{
+							"name":         "partner",
+							"security_ips": []string{"172.16.0.0/24"},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"db_instance_ip_arrays.#": "2",
+					}),
+				),
+			},
+		},
+	})
 }
