@@ -15,6 +15,8 @@ For information about RDS Parameter Group and how to use it, see [What is Parame
 
 -> **NOTE:** Available since v1.119.0.
 
+-> **NOTE:** `resource_group_id` and `modify_mode` are write-only for the RDS API: they are sent to `CreateParameterGroup`/`ModifyParameterGroup` but never returned by `DescribeParameterGroup` or `DescribeParameterGroups`. They cannot be read back, so they are empty in the state of an imported parameter group; set them in the configuration to let Terraform manage them. Removing them from the configuration keeps the current value on the server and does not fall back to any default.
+
 ## Example Usage
 
 Basic Usage
@@ -54,9 +56,11 @@ The following arguments are supported:
 
 * `engine` - (Required, ForceNew) The database engine. Valid values: `mysql`, `mariadb`, `PostgreSQL`.
 * `engine_version` - (Required, ForceNew) The version of the database engine. Valid values: mysql: `5.1`, `5.5`, `5.6`, `5.7`, `8.0`; mariadb: `10.3`; PostgreSQL: `10.0`, `11.0`, `12.0`, `13.0`, `14.0`, `15.0`.
+* `modify_mode` - (Optional, String, Available since v2.2.0) The modification mode of the parameter template when `param_detail` is updated. Valid values: `Collectivity`, `Individual`. `Collectivity` adds or changes the parameters in `param_detail`, other parameters in the template are not affected. `Individual` replaces the parameters in the template with `param_detail`. This argument is only sent to the `ModifyParameterGroup` API when its value changes; if it is not sent, the API applies `Collectivity`. It is not returned by the API.
 * `param_detail` - (Required) Parameter list. See [`param_detail`](#param_detail) below.
 * `parameter_group_desc` - (Optional) The description of the parameter template.
 * `parameter_group_name` - (Required) The name of the parameter template.
+* `resource_group_id` - (Optional, Computed, String, Available since v2.2.0) The ID of the resource group to which the parameter template belongs. It is sent to the `CreateParameterGroup` and `ModifyParameterGroup` API. The RDS API does not return this field, so it cannot be read back after import.
 
 ### `param_detail`
 
@@ -70,6 +74,14 @@ The param_detail supports the following:
 The following attributes are exported:
 
 * `id` - The resource ID in terraform of Parameter Group.
+* `related_custins_info` - (Computed, List, Available since v2.2.0) A list of RDS instances to which the parameter template is applied. Only PostgreSQL templates support this attribute. See [`related_custins_info`](#related_custins_info) below.
+
+### `related_custins_info`
+
+The related_custins_info supports the following:
+
+* `db_instance_name` - (Computed, String, Available since v2.2.0) The ID of the RDS instance to which the parameter template is applied.
+* `applied_time` - (Computed, String, Available since v2.2.0) The time when the parameter template was applied to the RDS instance.
 
 ## Import
 

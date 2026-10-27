@@ -57,6 +57,32 @@ func resourceAlicloudRdsParameterGroup() *schema.Resource {
 				Type:     schema.TypeString,
 				Required: true,
 			},
+			"resource_group_id": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+			},
+			"modify_mode": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ValidateFunc: validation.StringInSlice([]string{"Collectivity", "Individual"}, false),
+			},
+			"related_custins_info": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"db_instance_name": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"applied_time": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -80,6 +106,9 @@ func resourceAlicloudRdsParameterGroupCreate(d *schema.ResourceData, meta interf
 	request["Parameters"] = paramStr
 	if v, ok := d.GetOk("parameter_group_desc"); ok {
 		request["ParameterGroupDesc"] = v
+	}
+	if v, ok := d.GetOk("resource_group_id"); ok {
+		request["ResourceGroupId"] = v
 	}
 
 	request["ParameterGroupName"] = d.Get("parameter_group_name")
@@ -134,6 +163,24 @@ func resourceAlicloudRdsParameterGroupRead(d *schema.ResourceData, meta interfac
 	}
 	d.Set("parameter_group_desc", object["ParameterGroupDesc"])
 	d.Set("parameter_group_name", object["ParameterGroupName"])
+	relatedCustinsInfo := make([]map[string]interface{}, 0)
+	if v, ok := object["RelatedCustinsInfo"].([]interface{}); ok {
+		for _, val := range v {
+			item, ok := val.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			dbInstanceName, _ := item["DBInstanceName"].(string)
+			appliedTime, _ := item["AppliedTime"].(string)
+			relatedCustinsInfo = append(relatedCustinsInfo, map[string]interface{}{
+				"db_instance_name": dbInstanceName,
+				"applied_time":     appliedTime,
+			})
+		}
+	}
+	if err := d.Set("related_custins_info", relatedCustinsInfo); err != nil {
+		return WrapError(err)
+	}
 	return nil
 }
 func resourceAlicloudRdsParameterGroupUpdate(d *schema.ResourceData, meta interface{}) error {
@@ -164,6 +211,18 @@ func resourceAlicloudRdsParameterGroupUpdate(d *schema.ResourceData, meta interf
 	if d.HasChange("parameter_group_name") {
 		update = true
 		request["ParameterGroupName"] = d.Get("parameter_group_name")
+	}
+	if d.HasChange("resource_group_id") {
+		if v, ok := d.GetOk("resource_group_id"); ok {
+			update = true
+			request["ResourceGroupId"] = v
+		}
+	}
+	if d.HasChange("modify_mode") {
+		if v, ok := d.GetOk("modify_mode"); ok {
+			update = true
+			request["ModifyMode"] = v
+		}
 	}
 	if update {
 		action := "ModifyParameterGroup"

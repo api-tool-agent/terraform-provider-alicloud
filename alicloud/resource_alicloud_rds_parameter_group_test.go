@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -56,10 +57,11 @@ func TestAccAliCloudRdsParameterGroup_basic(t *testing.T) {
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"engine":               "mysql",
-						"engine_version":       "5.7",
-						"param_detail.#":       "2",
-						"parameter_group_name": name,
+						"engine":                 "mysql",
+						"engine_version":         "5.7",
+						"param_detail.#":         "2",
+						"parameter_group_name":   name,
+						"related_custins_info.#": "0",
 					}),
 				),
 			},
@@ -256,6 +258,14 @@ func TestUnitAlicloudRdsParameterGroup(t *testing.T) {
 			},
 		},
 		"ParameterGroupId": "CreateParameterGroupValue",
+		"RelatedCustinsInfo": map[string]interface{}{
+			"RelatedCustinsInfo": []interface{}{
+				map[string]interface{}{
+					"DBInstanceName": "CreateParameterGroupValue",
+					"AppliedTime":    "CreateParameterGroupValue",
+				},
+			},
+		},
 	}
 	CreateMockResponse := map[string]interface{}{
 		// CreateParameterGroup
@@ -446,6 +456,16 @@ func TestUnitAlicloudRdsParameterGroup(t *testing.T) {
 		}
 	}
 
+	relatedCustinsInfo, ok := dExisted.Get("related_custins_info").([]interface{})
+	assert.True(t, ok)
+	if ok && len(relatedCustinsInfo) == 1 {
+		entry, _ := relatedCustinsInfo[0].(map[string]interface{})
+		assert.Equal(t, "CreateParameterGroupValue", entry["db_instance_name"])
+		assert.Equal(t, "CreateParameterGroupValue", entry["applied_time"])
+	} else {
+		assert.Equal(t, 1, len(relatedCustinsInfo))
+	}
+
 	// Delete
 	patches = gomonkey.ApplyMethod(reflect.TypeOf(&connectivity.AliyunClient{}), "NewRdsClient", func(_ *connectivity.AliyunClient) (*client.Client, error) {
 		return nil, &tea.SDKError{
@@ -527,10 +547,11 @@ func TestAccAliCloudRdsParameterGroupPostgreSQL(t *testing.T) {
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"engine":               "PostgreSQL",
-						"engine_version":       "11.0",
-						"param_detail.#":       "2",
-						"parameter_group_name": name,
+						"engine":                 "PostgreSQL",
+						"engine_version":         "11.0",
+						"param_detail.#":         "2",
+						"parameter_group_name":   name,
+						"related_custins_info.#": "0",
 					}),
 				),
 			},
@@ -603,4 +624,377 @@ func TestAccAliCloudRdsParameterGroupPostgreSQL(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAccAliCloudRdsParameterGroupResourceGroupAndModifyMode(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_rds_parameter_group.default"
+	ra := resourceAttrInit(resourceId, AlicloudRdsParameterGroupMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &RdsService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeRdsParameterGroup")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf_testAccRdsPg%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudRdsParameterGroupResourceGroupDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+
+		ProviderFactories: testAccProviderFactory,
+		CheckDestroy:      rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"engine":         "mysql",
+					"engine_version": "5.7",
+					"param_detail": []map[string]interface{}{
+						{
+							"param_name":  "back_log",
+							"param_value": "3000",
+						},
+						{
+							"param_name":  "wait_timeout",
+							"param_value": "86400",
+						},
+					},
+					"parameter_group_name": "${var.name}",
+					"resource_group_id":    "${alicloud_resource_manager_resource_group.first.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id":      CHECKSET,
+						"related_custins_info.#": "0",
+					}),
+					testAccCheckRdsParameterGroupInResourceGroup(resourceId, "alicloud_resource_manager_resource_group.first"),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"resource_group_id": "${alicloud_resource_manager_resource_group.second.id}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"resource_group_id": CHECKSET,
+					}),
+					testAccCheckRdsParameterGroupInResourceGroup(resourceId, "alicloud_resource_manager_resource_group.second"),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"modify_mode": "Individual",
+					"param_detail": []map[string]interface{}{
+						{
+							"param_name":  "back_log",
+							"param_value": "4000",
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"modify_mode":    "Individual",
+						"param_detail.#": "1",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"modify_mode": "Collectivity",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"modify_mode":    "Collectivity",
+						"param_detail.#": "1",
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"resource_group_id", "modify_mode"},
+			},
+		},
+	})
+}
+
+func AlicloudRdsParameterGroupResourceGroupDependence0(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+  default = "%s"
+}
+
+resource "alicloud_resource_manager_resource_group" "first" {
+  resource_group_name = "${replace(var.name, "_", "-")}-1"
+  display_name        = var.name
+}
+
+resource "alicloud_resource_manager_resource_group" "second" {
+  resource_group_name = "${replace(var.name, "_", "-")}-2"
+  display_name        = var.name
+}
+`, name)
+}
+
+func testAccCheckRdsParameterGroupInResourceGroup(resourceId, resourceGroupRef string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceId]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceId)
+		}
+		resourceGroup, ok := s.RootModule().Resources[resourceGroupRef]
+		if !ok {
+			return fmt.Errorf("resource group %s not found in state", resourceGroupRef)
+		}
+		client := testAccProvider.Meta().(*connectivity.AliyunClient)
+		response, err := client.RpcPost("Rds", "2014-08-15", "DescribeParameterGroups", map[string]interface{}{
+			"RegionId":        client.RegionId,
+			"ResourceGroupId": resourceGroup.Primary.ID,
+		}, nil, true)
+		if err != nil {
+			return WrapError(err)
+		}
+		found := false
+		if groups, ok := response["ParameterGroups"].(map[string]interface{}); ok {
+			if items, ok := groups["ParameterGroup"].([]interface{}); ok {
+				for _, item := range items {
+					group, ok := item.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					if fmt.Sprint(group["ParameterGroupId"]) == rs.Primary.ID {
+						found = true
+						break
+					}
+				}
+			}
+		}
+		if !found {
+			return fmt.Errorf("parameter group %s not returned by DescribeParameterGroups with ResourceGroupId %s", rs.Primary.ID, resourceGroup.Primary.ID)
+		}
+		return nil
+	}
+}
+
+func TestAccAliCloudRdsParameterGroupRelatedCustinsInfo(t *testing.T) {
+	var v map[string]interface{}
+	resourceId := "alicloud_rds_parameter_group.default"
+	ra := resourceAttrInit(resourceId, AlicloudRdsParameterGroupMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &RdsService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeRdsParameterGroup")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tf_testAccRdsPg%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudRdsParameterGroupRelatedCustinsInfoDependence0)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+
+		ProviderFactories: testAccProviderFactory,
+		CheckDestroy:      rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"engine":         "PostgreSQL",
+					"engine_version": "15.0",
+					"param_detail": []map[string]interface{}{
+						{
+							"param_name":  "enable_sort",
+							"param_value": "off",
+						},
+						{
+							"param_name":  "geqo_seed",
+							"param_value": "0.1",
+						},
+					},
+					"parameter_group_name": "${var.name}",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"engine":                 "PostgreSQL",
+						"engine_version":         "15.0",
+						"param_detail.#":         "2",
+						"parameter_group_name":   name,
+						"related_custins_info.#": "1",
+						"related_custins_info.0.db_instance_name": CHECKSET,
+						"related_custins_info.0.applied_time":     CHECKSET,
+					}),
+					resource.TestCheckResourceAttrPair(resourceId, "related_custins_info.0.db_instance_name", "alicloud_db_instance.default", "id"),
+				),
+			},
+			{
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func AlicloudRdsParameterGroupRelatedCustinsInfoDependence0(name string) string {
+	return fmt.Sprintf(`
+variable "name" {
+  default = "%s"
+}
+
+data "alicloud_db_zones" "default" {
+  engine                   = "PostgreSQL"
+  engine_version           = "15.0"
+  instance_charge_type     = "PostPaid"
+  category                 = "HighAvailability"
+  db_instance_storage_type = "cloud_essd"
+}
+
+data "alicloud_db_instance_classes" "default" {
+  zone_id                  = data.alicloud_db_zones.default.zones.0.id
+  engine                   = "PostgreSQL"
+  engine_version           = "15.0"
+  category                 = "HighAvailability"
+  db_instance_storage_type = "cloud_essd"
+  instance_charge_type     = "PostPaid"
+}
+
+data "alicloud_vpcs" "default" {
+  name_regex = "^default-NODELETING$"
+}
+
+data "alicloud_vswitches" "default" {
+  vpc_id  = data.alicloud_vpcs.default.ids.0
+  zone_id = data.alicloud_db_zones.default.zones.0.id
+}
+
+resource "alicloud_vswitch" "this" {
+  count        = length(data.alicloud_vswitches.default.ids) > 0 ? 0 : 1
+  vswitch_name = var.name
+  vpc_id       = data.alicloud_vpcs.default.ids.0
+  zone_id      = data.alicloud_db_zones.default.ids.0
+  cidr_block   = cidrsubnet(data.alicloud_vpcs.default.vpcs.0.cidr_block, 8, 4)
+}
+
+locals {
+  vswitch_id = length(data.alicloud_vswitches.default.ids) > 0 ? data.alicloud_vswitches.default.ids.0 : concat(alicloud_vswitch.this.*.id, [""])[0]
+}
+
+resource "alicloud_db_instance" "default" {
+  engine                   = "PostgreSQL"
+  engine_version           = "15.0"
+  instance_type            = data.alicloud_db_instance_classes.default.instance_classes.0.instance_class
+  instance_storage         = data.alicloud_db_instance_classes.default.instance_classes.0.storage_range.0.min
+  db_instance_storage_type = "cloud_essd"
+  zone_id                  = data.alicloud_db_zones.default.zones.0.id
+  vswitch_id               = local.vswitch_id
+  instance_charge_type     = "Postpaid"
+  instance_name            = "${var.name}db"
+  db_param_group_id        = alicloud_rds_parameter_group.default.id
+}
+`, name)
+}
+
+func TestUnitAlicloudRdsParameterGroupRequestParameters(t *testing.T) {
+	p := Provider().ResourcesMap
+	region := os.Getenv("ALICLOUD_REGION")
+	rawClient, err := sharedClientForRegion(region)
+	if err != nil {
+		t.Skipf("Skipping the test case with err: %s", err)
+		t.Skipped()
+	}
+	rawClient = rawClient.(*connectivity.AliyunClient)
+
+	describeResponse := func(id string) map[string]interface{} {
+		return map[string]interface{}{
+			"ParamGroup": map[string]interface{}{
+				"ParameterGroup": []interface{}{
+					map[string]interface{}{
+						"ParameterGroupId": id,
+						"Engine":           "mysql",
+						"EngineVersion":    "5.7",
+						"ParamDetail": map[string]interface{}{
+							"ParameterDetail": []interface{}{
+								map[string]interface{}{
+									"ParamName":  "back_log",
+									"ParamValue": "3000",
+								},
+							},
+						},
+						"ParameterGroupName": "tf-testacc-parameter-group",
+					},
+				},
+			},
+		}
+	}
+
+	var captured map[string]interface{}
+	patches := gomonkey.ApplyMethod(reflect.TypeOf(&client.Client{}), "DoRequest", func(_ *client.Client, action *string, _ *string, _ *string, _ *string, _ *string, _ map[string]interface{}, body map[string]interface{}, _ *util.RuntimeOptions) (map[string]interface{}, error) {
+		switch *action {
+		case "CreateParameterGroup":
+			captured = body
+			return map[string]interface{}{"ParameterGroupId": "rpg-test"}, nil
+		case "ModifyParameterGroup":
+			captured = body
+			return map[string]interface{}{"ParameterGroupId": "rpg-test"}, nil
+		}
+		return describeResponse("rpg-test"), nil
+	})
+	defer patches.Reset()
+
+	newAttributes := func() map[string]interface{} {
+		return map[string]interface{}{
+			"engine":         "mysql",
+			"engine_version": "5.7",
+			"param_detail": []map[string]interface{}{
+				{
+					"param_name":  "back_log",
+					"param_value": "3000",
+				},
+			},
+			"parameter_group_name": "tf-testacc-parameter-group",
+		}
+	}
+
+	dCreate, _ := schema.InternalMap(p["alicloud_rds_parameter_group"].Schema).Data(nil, nil)
+	dCreate.MarkNewResource()
+	for key, value := range newAttributes() {
+		assert.Nil(t, dCreate.Set(key, value))
+	}
+	assert.Nil(t, dCreate.Set("resource_group_id", "rg-test"))
+	captured = nil
+	assert.Nil(t, resourceAlicloudRdsParameterGroupCreate(dCreate, rawClient))
+	assert.Equal(t, "rg-test", captured["ResourceGroupId"])
+	if _, ok := captured["ModifyMode"]; ok {
+		t.Fatal("CreateParameterGroup must not send ModifyMode")
+	}
+
+	attributes := newAttributes()
+	diff, err := newInstanceDiff("alicloud_rds_parameter_group", attributes, map[string]interface{}{
+		"resource_group_id": "rg-test2",
+		"modify_mode":       "Individual",
+	}, dCreate.State())
+	assert.Nil(t, err)
+	dUpdate, _ := schema.InternalMap(p["alicloud_rds_parameter_group"].Schema).Data(dCreate.State(), diff)
+	captured = nil
+	assert.Nil(t, resourceAlicloudRdsParameterGroupUpdate(dUpdate, rawClient))
+	assert.Equal(t, "rg-test2", captured["ResourceGroupId"])
+	assert.Equal(t, "Individual", captured["ModifyMode"])
+
+	attributes = newAttributes()
+	attributes["resource_group_id"] = "rg-test2"
+	attributes["modify_mode"] = "Individual"
+	diff, err = newInstanceDiff("alicloud_rds_parameter_group", attributes, map[string]interface{}{
+		"parameter_group_desc": "updated",
+	}, dCreate.State())
+	assert.Nil(t, err)
+	dUpdate, _ = schema.InternalMap(p["alicloud_rds_parameter_group"].Schema).Data(dUpdate.State(), diff)
+	captured = nil
+	assert.Nil(t, resourceAlicloudRdsParameterGroupUpdate(dUpdate, rawClient))
+	if _, ok := captured["ModifyMode"]; ok {
+		t.Fatal("ModifyParameterGroup must not send an unchanged ModifyMode")
+	}
+	if _, ok := captured["ResourceGroupId"]; ok {
+		t.Fatal("ModifyParameterGroup must not send an unchanged ResourceGroupId")
+	}
 }

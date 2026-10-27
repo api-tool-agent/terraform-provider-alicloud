@@ -2250,6 +2250,12 @@ func (s *RdsService) DescribeRdsParameterGroup(id string) (object map[string]int
 		}
 	}
 	object = v.([]interface{})[0].(map[string]interface{})
+	relatedCustinsInfo, err := jsonpath.Get("$.RelatedCustinsInfo.RelatedCustinsInfo", response)
+	if err != nil {
+		object["RelatedCustinsInfo"] = make([]interface{}, 0)
+	} else {
+		object["RelatedCustinsInfo"] = relatedCustinsInfo
+	}
 	return object, nil
 }
 
