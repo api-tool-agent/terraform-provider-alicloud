@@ -204,6 +204,16 @@ The config_server_list supports the following:
 The following attributes are exported:
 
 * `id` - The resource ID in terraform of Sharding Instance.
+* `status` - (Available since v2.2.0) The status of the Sharding Instance.
+* `engine` - (Available since v2.2.0) The database engine of the Sharding Instance.
+* `db_instance_class` - (Available since v2.2.0) The instance class of the Sharding Instance.
+* `db_instance_storage` - (Available since v2.2.0) The storage space of the Sharding Instance. Unit: GB. This attribute is exported only when the instance reports a value.
+* `payment_type` - (Available since v2.2.0) The payment type of the Sharding Instance. Valid values: `PrePaid`, `PostPaid`.
+* `db_instance_description` - (Available since v2.2.0) The description of the Sharding Instance. It has the same value as `name`.
+* `replica_sets` - (Available since v2.2.0) The information of the replica sets. This attribute is only populated when the instance actually exposes replica set information; it is empty for sharding instances that do not return it.
+  * `vpc_id` - The VPC ID of the replica set.
+  * `vswitch_id` - The VSwitch ID of the replica set.
+  * `network_type` - The network type of the replica set.
 * `retention_period` - (Available since v1.42.0) Instance data backup retention days.
 * `ssl_status` - (Available since v1.259.0) The status of the SSL feature.
 * `key_ids` - (Available since v1.271.0) A list of instance keys.
@@ -211,6 +221,7 @@ The following attributes are exported:
   * `node_id` - The ID of the mongo node.
   * `connect_string` - The endpoint of the mongo node.
   * `port` - The port number that is used to connect to the mongo node.
+  * `status` - (Available since v2.2.0) The status of the mongo node.
 * `shard_list` - The information of the shard node.
   * `node_id` - The ID of the shard node.
 * `config_server_list` - The information of the ConfigServer nodes.

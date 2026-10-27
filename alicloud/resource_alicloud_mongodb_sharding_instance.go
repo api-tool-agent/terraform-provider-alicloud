@@ -329,6 +329,10 @@ func resourceAliCloudMongoDBShardingInstance() *schema.Resource {
 							Type:     schema.TypeInt,
 							Computed: true,
 						},
+						"status": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
 					},
 				},
 			},
@@ -401,6 +405,50 @@ func resourceAliCloudMongoDBShardingInstance() *schema.Resource {
 							Computed: true,
 						},
 						"node_description": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+					},
+				},
+			},
+			"status": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"engine": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"db_instance_class": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"db_instance_storage": {
+				Type:     schema.TypeInt,
+				Computed: true,
+			},
+			"payment_type": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"db_instance_description": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"replica_sets": {
+				Type:     schema.TypeList,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"vpc_id": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"vswitch_id": {
+							Type:     schema.TypeString,
+							Computed: true,
+						},
+						"network_type": {
 							Type:     schema.TypeString,
 							Computed: true,
 						},
@@ -699,6 +747,21 @@ func resourceAliCloudMongoDBShardingInstanceRead(d *schema.ResourceData, meta in
 	d.Set("hidden_zone_id", object["HiddenZoneId"])
 	d.Set("network_type", object["NetworkType"])
 	d.Set("name", object["DBInstanceDescription"])
+	d.Set("db_instance_description", object["DBInstanceDescription"])
+	d.Set("status", object["DBInstanceStatus"])
+	d.Set("engine", object["Engine"])
+	d.Set("db_instance_class", object["DBInstanceClass"])
+	// DescribeDBInstanceAttribute returns no PaymentType; ChargeType carries the same billing-type semantics.
+	d.Set("payment_type", object["ChargeType"])
+
+	if v, ok := object["DBInstanceStorage"]; ok && v != nil {
+		dbInstanceStorageVal, formatErr := formatInt(v)
+		if formatErr != nil {
+			return formatErr
+		}
+		d.Set("db_instance_storage", dbInstanceStorageVal)
+	}
+
 	d.Set("instance_charge_type", object["ChargeType"])
 	d.Set("resource_group_id", object["ResourceGroupId"])
 	d.Set("maintain_start_time", object["MaintainStartTime"])
@@ -878,6 +941,10 @@ func resourceAliCloudMongoDBShardingInstanceRead(d *schema.ResourceData, meta in
 					MongosListItemMap["port"] = portValue
 				}
 
+				if status, ok := MongosListArg["Status"]; ok {
+					MongosListItemMap["status"] = status
+				}
+
 				MongosListMaps = append(MongosListMaps, MongosListItemMap)
 			}
 
@@ -970,6 +1037,35 @@ func resourceAliCloudMongoDBShardingInstanceRead(d *schema.ResourceData, meta in
 			}
 
 			d.Set("config_server_list", configServerListMaps)
+		}
+	}
+
+	if replicaSetsMap, ok := object["ReplicaSets"].(map[string]interface{}); ok && replicaSetsMap != nil {
+		if replicaSets, ok := replicaSetsMap["ReplicaSet"]; ok && replicaSets != nil {
+			replicaSetsMaps := make([]map[string]interface{}, 0)
+			for _, replicaSetsList := range replicaSets.([]interface{}) {
+				replicaSetArg, ok := replicaSetsList.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				replicaSetItemMap := make(map[string]interface{})
+
+				if vpcId, ok := replicaSetArg["VPCId"]; ok {
+					replicaSetItemMap["vpc_id"] = vpcId
+				}
+
+				if vswitchId, ok := replicaSetArg["VSwitchId"]; ok {
+					replicaSetItemMap["vswitch_id"] = vswitchId
+				}
+
+				if networkType, ok := replicaSetArg["NetworkType"]; ok {
+					replicaSetItemMap["network_type"] = networkType
+				}
+
+				replicaSetsMaps = append(replicaSetsMaps, replicaSetItemMap)
+			}
+
+			d.Set("replica_sets", replicaSetsMaps)
 		}
 	}
 

@@ -3,6 +3,7 @@ package alicloud
 import (
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/retry"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func init() {
@@ -104,6 +106,7 @@ func testSweepMongoDBShardingInstances(region string) error {
 func TestAccAliCloudMongoDBShardingInstance_basic0(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_mongodb_sharding_instance.default"
+	checkMongoDBShardingRegionZoneFixtures()
 	testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 	serverFunc := func() interface{} {
 		return &MongoDBService{testAccProvider.Meta().(*connectivity.AliyunClient)}
@@ -118,7 +121,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic0(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, true, []connectivity.Region{"eu-central-1"})
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 		},
 		ProviderFactories: testAccProviderFactory,
 		CheckDestroy:      nil,
@@ -154,6 +157,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic0(t *testing.T) {
 						"mongo_list.#":   "2",
 						"shard_list.#":   "2",
 					}),
+					testAccCheckMongoDBShardingInstanceDBInstanceStorage(resourceId),
 				),
 			},
 			{
@@ -172,7 +176,8 @@ func TestAccAliCloudMongoDBShardingInstance_basic0(t *testing.T) {
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"name": name,
+						"name":                    name,
+						"db_instance_description": name,
 					}),
 				),
 			},
@@ -357,10 +362,12 @@ func TestAccAliCloudMongoDBShardingInstance_basic0(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            resourceId,
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters"},
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// status and mongo_list.0.status are transient lifecycle fields maintained by the service,
+				// so a refresh right after import can legitimately differ from the applied state.
+				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters", "status", "mongo_list.0.status"},
 			},
 		},
 	})
@@ -369,6 +376,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic0(t *testing.T) {
 func TestAccAliCloudMongoDBShardingInstance_securityIpGroups(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_mongodb_sharding_instance.default"
+	checkMongoDBShardingRegionZoneFixtures()
 	testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 	serverFunc := func() interface{} {
 		return &MongoDBService{testAccProvider.Meta().(*connectivity.AliyunClient)}
@@ -456,10 +464,12 @@ func TestAccAliCloudMongoDBShardingInstance_securityIpGroups(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            resourceId,
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters"},
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// status and mongo_list.0.status are transient lifecycle fields maintained by the service,
+				// so a refresh right after import can legitimately differ from the applied state.
+				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters", "status", "mongo_list.0.status"},
 			},
 		},
 	})
@@ -468,6 +478,7 @@ func TestAccAliCloudMongoDBShardingInstance_securityIpGroups(t *testing.T) {
 func TestAccAliCloudMongoDBShardingInstance_basic0_twin(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_mongodb_sharding_instance.default"
+	checkMongoDBShardingRegionZoneFixtures()
 	testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 	serverFunc := func() interface{} {
 		return &MongoDBService{testAccProvider.Meta().(*connectivity.AliyunClient)}
@@ -482,7 +493,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic0_twin(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, true, []connectivity.Region{"eu-central-1"})
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 		},
 		ProviderFactories: testAccProviderFactory,
 		CheckDestroy:      rac.checkResourceDestroy(),
@@ -567,10 +578,12 @@ func TestAccAliCloudMongoDBShardingInstance_basic0_twin(t *testing.T) {
 				),
 			},
 			{
-				ResourceName:            resourceId,
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters"},
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// status and mongo_list.0.status are transient lifecycle fields maintained by the service,
+				// so a refresh right after import can legitimately differ from the applied state.
+				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters", "status", "mongo_list.0.status"},
 			},
 		},
 	})
@@ -579,6 +592,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic0_twin(t *testing.T) {
 func TestAccAliCloudMongoDBShardingInstance_basic1(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_mongodb_sharding_instance.default"
+	checkMongoDBShardingRegionZoneFixtures()
 	testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 	serverFunc := func() interface{} {
 		return &MongoDBService{testAccProvider.Meta().(*connectivity.AliyunClient)}
@@ -593,7 +607,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic1(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, true, []connectivity.Region{"eu-central-1"})
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 		},
 		ProviderFactories: testAccProviderFactory,
 		CheckDestroy:      rac.checkResourceDestroy(),
@@ -636,6 +650,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic1(t *testing.T) {
 						"shard_list.#":         "2",
 						"config_server_list.#": "1",
 					}),
+					testAccCheckMongoDBShardingInstanceDBInstanceStorage(resourceId),
 				),
 			},
 			{
@@ -688,7 +703,8 @@ func TestAccAliCloudMongoDBShardingInstance_basic1(t *testing.T) {
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"name": name,
+						"name":                    name,
+						"db_instance_description": name,
 					}),
 				),
 			},
@@ -1011,10 +1027,12 @@ func TestAccAliCloudMongoDBShardingInstance_basic1(t *testing.T) {
 				ExpectError: regexp.MustCompile("Missing required argument"),
 			},
 			{
-				ResourceName:            resourceId,
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters"},
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// status and mongo_list.0.status are transient lifecycle fields maintained by the service,
+				// so a refresh right after import can legitimately differ from the applied state.
+				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters", "status", "mongo_list.0.status"},
 			},
 		},
 	})
@@ -1023,6 +1041,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic1(t *testing.T) {
 func TestAccAliCloudMongoDBShardingInstance_basic1_twin(t *testing.T) {
 	var v map[string]interface{}
 	resourceId := "alicloud_mongodb_sharding_instance.default"
+	checkMongoDBShardingRegionZoneFixtures()
 	testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 	serverFunc := func() interface{} {
 		return &MongoDBService{testAccProvider.Meta().(*connectivity.AliyunClient)}
@@ -1037,7 +1056,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic1_twin(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
-			testAccPreCheckWithRegions(t, true, []connectivity.Region{"eu-central-1"})
+			testAccPreCheckWithRegions(t, true, []connectivity.Region{connectivity.Region(mongodbTestRegion())})
 		},
 		ProviderFactories: testAccProviderFactory,
 		CheckDestroy:      rac.checkResourceDestroy(),
@@ -1131,6 +1150,7 @@ func TestAccAliCloudMongoDBShardingInstance_basic1_twin(t *testing.T) {
 						"security_group_id":         CHECKSET,
 						"network_type":              "VPC",
 						"name":                      name,
+						"db_instance_description":   name,
 						"instance_charge_type":      "PostPaid",
 						"security_ip_list.#":        "1",
 						"encrypted":                 "true",
@@ -1159,16 +1179,72 @@ func TestAccAliCloudMongoDBShardingInstance_basic1_twin(t *testing.T) {
 						"tags.Created":                                "TF",
 						"tags.For":                                    "ShardingInstance",
 					}),
+					testAccCheckMongoDBShardingInstanceDBInstanceStorage(resourceId),
 				),
 			},
 			{
-				ResourceName:            resourceId,
-				ImportState:             true,
-				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters"},
+				ResourceName:      resourceId,
+				ImportState:       true,
+				ImportStateVerify: true,
+				// status and mongo_list.0.status are transient lifecycle fields maintained by the service,
+				// so a refresh right after import can legitimately differ from the applied state.
+				ImportStateVerifyIgnore: []string{"account_password", "kms_encrypted_password", "kms_encryption_context", "ssl_action", "order_type", "parameters", "status", "mongo_list.0.status"},
 			},
 		},
 	})
+}
+
+// checkMongoDBShardingRegionZoneFixtures fails fast when only part of the
+// region/zone override set is provided. The step PreCheck forces the provider
+// region to MONGODB_TEST_REGION while the zone defaults stay in cn-beijing, so
+// overriding the region alone would put the VSwitch and the instance in two
+// regions, which the API rejects.
+func checkMongoDBShardingRegionZoneFixtures() {
+	region := os.Getenv("MONGODB_TEST_REGION")
+	if region == "" || region == "cn-beijing" {
+		return
+	}
+	for _, key := range []string{"MONGODB_TEST_ZONE_PRIMARY", "MONGODB_TEST_ZONE_SECONDARY", "MONGODB_TEST_ZONE_HIDDEN"} {
+		if os.Getenv(key) == "" {
+			panic(fmt.Sprintf("MONGODB_TEST_REGION=%s also requires %s so that the region and zone fixtures belong to the same region", region, key))
+		}
+	}
+}
+
+// testAccCheckMongoDBShardingInstanceDBInstanceStorage compares db_instance_storage
+// in state with the value the API actually returns, so an absent API field cannot
+// pass as an exported zero.
+func testAccCheckMongoDBShardingInstanceDBInstanceStorage(resourceId string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceId]
+		if !ok || rs.Primary.ID == "" {
+			return fmt.Errorf("resource %s is not found in state", resourceId)
+		}
+
+		client := testAccProvider.Meta().(*connectivity.AliyunClient)
+		object, err := (&MongoDBService{client}).DescribeMongoDBShardingInstance(rs.Primary.ID)
+		if err != nil {
+			return fmt.Errorf("describing %s: %s", rs.Primary.ID, err)
+		}
+
+		stateValue, stateHas := rs.Primary.Attributes["db_instance_storage"]
+		raw, apiHas := object["DBInstanceStorage"]
+		if !apiHas || raw == nil {
+			if stateHas && stateValue != "" {
+				return fmt.Errorf("db_instance_storage=%q is set in state but the API returned no DBInstanceStorage", stateValue)
+			}
+			return nil
+		}
+
+		expected, err := formatInt(raw)
+		if err != nil {
+			return err
+		}
+		if !stateHas || stateValue != fmt.Sprint(expected) {
+			return fmt.Errorf("db_instance_storage=%q, but the API returns DBInstanceStorage=%d", stateValue, expected)
+		}
+		return nil
+	}
 }
 
 var AliCloudMongoDBShardingInstanceMap0 = map[string]string{
@@ -1189,6 +1265,11 @@ var AliCloudMongoDBShardingInstanceMap0 = map[string]string{
 	"retention_period":     CHECKSET,
 	"ssl_status":           CHECKSET,
 	"zone_infos.#":         CHECKSET,
+	"status":               CHECKSET,
+	"engine":               CHECKSET,
+	"db_instance_class":    CHECKSET,
+	"payment_type":         CHECKSET,
+	"mongo_list.0.status":  CHECKSET,
 }
 
 func AliCloudMongoDBShardingInstanceBasicDependence0(name string) string {
