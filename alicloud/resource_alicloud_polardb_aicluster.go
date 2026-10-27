@@ -112,6 +112,13 @@ func resourceAlicloudPolarDBAICluster() *schema.Resource {
 				ForceNew:    true,
 				Description: "The initial model capacity of the AI cluster. The capacity unit 1000 equals one L20N equivalent GPU.",
 			},
+			"storage_type": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				ForceNew:    true,
+				Description: "The storage type of the AI cluster. It is required when `capacity` is specified. Example: `essdpl0`.",
+			},
 			"model_space": {
 				Type:        schema.TypeString,
 				Optional:    true,
@@ -234,6 +241,9 @@ func resourceAlicloudPolarDBAIClusterCreate(d *schema.ResourceData, meta interfa
 	if v, ok := d.GetOk("capacity"); ok {
 		request["Capacity"] = v.(int)
 	}
+	if v, ok := d.GetOk("storage_type"); ok {
+		request["StorageType"] = v.(string)
+	}
 	if v, ok := d.GetOk("model_space"); ok {
 		request["ModelSpace"] = v.(string)
 	}
@@ -337,6 +347,9 @@ func resourceAlicloudPolarDBAIClusterRead(d *schema.ResourceData, meta interface
 	}
 	if v, ok := attribute["ModelSpaceName"].(string); ok {
 		d.Set("model_space", v)
+	}
+	if v, ok := attribute["StorageType"].(string); ok {
+		d.Set("storage_type", v)
 	}
 	if v, ok := attribute["AiNodeType"].(string); ok {
 		d.Set("extension", v)
