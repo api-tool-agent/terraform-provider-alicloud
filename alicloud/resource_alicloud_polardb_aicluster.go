@@ -105,6 +105,26 @@ func resourceAlicloudPolarDBAICluster() *schema.Resource {
 				ForceNew:    true,
 				Description: "The model name. Example: `Qwen3.5-9B`.",
 			},
+			"capacity": {
+				Type:        schema.TypeInt,
+				Optional:    true,
+				Computed:    true,
+				ForceNew:    true,
+				Description: "The initial model capacity of the AI cluster. The capacity unit 1000 equals one L20N equivalent GPU.",
+			},
+			"model_space": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				ForceNew:    true,
+				Description: "The model operator space of the AI cluster. Example: `pms-xxx`.",
+			},
+			"create_public_endpoint": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Specifies whether to create a public endpoint for the AI cluster. Example: `ON`.",
+			},
 			"extension": {
 				Type:         schema.TypeString,
 				Optional:     true,
@@ -211,6 +231,15 @@ func resourceAlicloudPolarDBAIClusterCreate(d *schema.ResourceData, meta interfa
 	if v, ok := d.GetOk("model_name"); ok {
 		request["ModelName"] = v.(string)
 	}
+	if v, ok := d.GetOk("capacity"); ok {
+		request["Capacity"] = v.(int)
+	}
+	if v, ok := d.GetOk("model_space"); ok {
+		request["ModelSpace"] = v.(string)
+	}
+	if v, ok := d.GetOk("create_public_endpoint"); ok {
+		request["CreatePublicEndpoint"] = v.(string)
+	}
 	if v, ok := d.GetOk("extension"); ok {
 		request["Extension"] = v.(string)
 	}
@@ -298,6 +327,16 @@ func resourceAlicloudPolarDBAIClusterRead(d *schema.ResourceData, meta interface
 	}
 	if v, ok := attribute["ModelName"].(string); ok {
 		d.Set("model_name", v)
+	}
+	if v, ok := attribute["CurrentCapacity"]; ok && v != nil {
+		capacity, err := formatInt(v)
+		if err != nil {
+			return WrapError(err)
+		}
+		d.Set("capacity", capacity)
+	}
+	if v, ok := attribute["ModelSpaceName"].(string); ok {
+		d.Set("model_space", v)
 	}
 	if v, ok := attribute["AiNodeType"].(string); ok {
 		d.Set("extension", v)

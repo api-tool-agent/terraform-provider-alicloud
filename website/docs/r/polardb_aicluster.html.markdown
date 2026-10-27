@@ -62,6 +62,9 @@ The following arguments are supported:
 * `security_group_id` - (Optional, ForceNew) The security group ID.
 * `kube_type` - (Optional, ForceNew) The type of the Kubernetes cluster. Valid values: `ainode`.
 * `model_name` - (Optional, ForceNew) The model name. Example: `Qwen3.5-9B`.
+* `capacity` - (Optional, ForceNew, Available since v2.2.0) The initial model capacity of the AI cluster. The capacity unit `1000` equals one L20N equivalent GPU.
+* `model_space` - (Optional, ForceNew, Available since v2.2.0) The model operator space of the AI cluster. Example: `pms-xxx`.
+* `create_public_endpoint` - (Optional, ForceNew, Available since v2.2.0) Specifies whether to create a public endpoint for the AI cluster. Example: `ON`.
 * `extension` - (Optional, ForceNew) The extension type. Valid values: `maas`, `custom`.
 * `inference_engine` - (Optional, ForceNew) The inference engine. Valid values: `sglang`, `vllm`.
 * `db_cluster_id` - (Optional, ForceNew) The ID of the associated DB cluster.
