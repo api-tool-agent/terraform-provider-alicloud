@@ -140,9 +140,11 @@ func TestAccAliCloudEfloHyperNode_basic11893(t *testing.T) {
 }
 
 var AlicloudEfloHyperNodeMap11893 = map[string]string{
-	"status":      CHECKSET,
-	"create_time": CHECKSET,
-	"region_id":   CHECKSET,
+	"status":       CHECKSET,
+	"create_time":  CHECKSET,
+	"product_code": "bccluster",
+	"product_type": CHECKSET,
+	"region_id":    CHECKSET,
 }
 
 func AlicloudEfloHyperNodeBasicDependence11893(name string) string {

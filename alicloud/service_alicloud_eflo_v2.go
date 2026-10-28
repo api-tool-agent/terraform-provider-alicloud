@@ -1580,43 +1580,49 @@ func (s *EfloServiceV2) DescribeHyperNodeListClusterHyperNodes(clusterId, id str
 	query = make(map[string]interface{})
 	request["RegionId"] = client.RegionId
 	request["ClusterId"] = clusterId
+	request["MaxResults"] = PageSizeLarge
 	action := "ListClusterHyperNodes"
 
-	wait := incrementalWait(3*time.Second, 5*time.Second)
-	err = retry.Retry(1*time.Minute, func() *retry.RetryError {
-		response, err = client.RpcPost("eflo-controller", "2022-12-15", action, query, request, true)
+	for {
+		wait := incrementalWait(3*time.Second, 5*time.Second)
+		err = retry.Retry(1*time.Minute, func() *retry.RetryError {
+			response, err = client.RpcPost("eflo-controller", "2022-12-15", action, query, request, true)
 
-		if err != nil {
-			if NeedRetry(err) {
-				wait()
-				return retry.RetryableError(err)
+			if err != nil {
+				if NeedRetry(err) {
+					wait()
+					return retry.RetryableError(err)
+				}
+				return retry.NonRetryableError(err)
 			}
-			return retry.NonRetryableError(err)
+			return nil
+		})
+		addDebug(action, response, request)
+		if err != nil {
+			return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
 		}
-		return nil
-	})
-	addDebug(action, response, request)
-	if err != nil {
-		return object, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
-	}
 
-	v, err := jsonpath.Get("$.HyperNodes[*]", response)
-	if err != nil {
-		return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.HyperNodes[*]", response)
-	}
-
-	if len(v.([]interface{})) == 0 {
-		return object, WrapErrorf(NotFoundErr("HyperNode", id), NotFoundMsg, response)
-	}
-
-	result, _ := v.([]interface{})
-	for _, v := range result {
-		item := v.(map[string]interface{})
-		if fmt.Sprint(item["HyperNodeId"]) != id {
-			continue
+		v, err := jsonpath.Get("$.HyperNodes[*]", response)
+		if err != nil {
+			return object, WrapErrorf(err, FailedGetAttributeMsg, id, "$.HyperNodes[*]", response)
 		}
-		return item, nil
+
+		result, _ := v.([]interface{})
+		for _, v := range result {
+			item := v.(map[string]interface{})
+			if fmt.Sprint(item["HyperNodeId"]) != id {
+				continue
+			}
+			return item, nil
+		}
+
+		if v, exists := response["NextToken"]; !exists || v == nil || fmt.Sprint(v) == "" {
+			break
+		} else {
+			request["NextToken"] = fmt.Sprint(v)
+		}
 	}
+
 	return object, WrapErrorf(NotFoundErr("HyperNode", id), NotFoundMsg, response)
 }
 

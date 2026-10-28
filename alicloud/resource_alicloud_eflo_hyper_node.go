@@ -101,6 +101,14 @@ func resourceAliCloudEfloHyperNode() *schema.Resource {
 				ForceNew:     true,
 				ValidateFunc: StringInSlice([]string{"Subscription"}, false),
 			},
+			"product_code": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+			"product_type": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 			"region_id": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -141,10 +149,12 @@ func resourceAliCloudEfloHyperNode() *schema.Resource {
 			"vswitch_id": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Computed: true,
 			},
 			"vpc_id": {
 				Type:     schema.TypeString,
 				Optional: true,
+				Computed: true,
 			},
 			"zone_id": {
 				Type:     schema.TypeString,
@@ -317,6 +327,8 @@ func resourceAliCloudEfloHyperNodeRead(d *schema.ResourceData, meta interface{})
 
 	d.Set("create_time", objectRaw["CreateTime"])
 	d.Set("payment_type", objectRaw["SubscriptionType"])
+	d.Set("product_code", objectRaw["ProductCode"])
+	d.Set("product_type", objectRaw["ProductType"])
 	d.Set("region_id", objectRaw["Region"])
 	if fmt.Sprint(objectRaw["RenewalDurationUnit"]) == "Y" {
 		renewalDuration, err := formatInt(objectRaw["RenewalDuration"])
@@ -337,7 +349,7 @@ func resourceAliCloudEfloHyperNodeRead(d *schema.ResourceData, meta interface{})
 	tagsMaps, _ := jsonpath.Get("$.TagResources.TagResource", objectRaw)
 	d.Set("tags", tagsToMap(tagsMaps))
 	if d.Get("status") == "HealthyUsing" {
-		objectRaw, err = efloServiceV2.DescribeHyperNodeListClusterHyperNodes(fmt.Sprint(objectRaw["ClusterId"]), d.Id())
+		objectRaw, err = efloServiceV2.DescribeHyperNodeListClusterHyperNodes(fmt.Sprint(d.Get("cluster_id")), d.Id())
 		if err != nil && !NotFoundError(err) {
 			return WrapError(err)
 		}

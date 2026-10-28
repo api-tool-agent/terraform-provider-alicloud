@@ -82,8 +82,8 @@ The following arguments are supported:
 
 * `tags` - (Optional, Map) The tag of the resource
 * `user_data` - (Optional, Available since v1.267.0) Custom user data for the sub computing node
-* `vswitch_id` - (Optional, Available since v1.267.0) The ID of the vswitch to which the sub computing node
-* `vpc_id` - (Optional, Available since v1.267.0) The ID of the vpc to which the sub computing node
+* `vswitch_id` - (Optional, Computed, Available since v1.267.0) The ID of the vswitch to which the sub computing node
+* `vpc_id` - (Optional, Computed, Available since v1.267.0) The ID of the vpc to which the sub computing node
 * `zone_id` - (Optional, ForceNew) The zone where the hyper compute node is located
 
 ### `data_disk`
@@ -104,6 +104,8 @@ The data_disk supports the following:
 The following attributes are exported:
 * `id` - The ID of the resource supplied above.
 * `create_time` - The creation time of the resource
+* `product_code` - (Computed, String, Available since v2.2.0) The product code of the resource
+* `product_type` - (Computed, String, Available since v2.2.0) The product type of the resource
 * `region_id` - The region ID of the resource
 * `status` - The status of the resource
 
