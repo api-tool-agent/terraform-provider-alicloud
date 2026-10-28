@@ -1260,7 +1260,6 @@ func Provider() *schema.Provider {
 
 			// cms
 			"alicloud_cms_event_notify_policy":     resourceAliCloudCmsEventNotifyPolicy(),
-			"alicloud_cms_alert_rule_v2":           resourceAliCloudCmsAlertRuleV2(),
 			"alicloud_cms_agg_task_group":          resourceAliCloudCmsAggTaskGroup(),
 			"alicloud_cms_addon_release":           resourceAliCloudCmsAddonRelease(),
 			"alicloud_cms_prometheus_view":         resourceAliCloudCmsPrometheusView(),

@@ -29,6 +29,8 @@ func testSweepLogProjects(region string) error {
 		"terraform-example",
 		"tf_test_",
 		"tf-test-",
+		"tf-cms-alertrulev2-example",
+		"tfacccms",
 		"k8s-log-",
 		"dbaudit",
 		"kms-log-",
