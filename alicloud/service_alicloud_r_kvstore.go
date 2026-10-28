@@ -2,6 +2,9 @@ package alicloud
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
@@ -996,4 +999,321 @@ func (s *R_kvstoreService) DescribeKvStoreGlobalSecurityGroupIds(id string) (glo
 	}
 
 	return globalSecurityGroupIds, nil
+}
+
+// DescribeKvstoreDataNodes lists every data node of an ApsaraDB for Redis/Tair instance with
+// its default and current bandwidth. DescribeRoleZoneInfo reports CurrentBandWidth as
+// "default bandwidth plus purchased additional bandwidth", which is the only read-only way to
+// observe the additional bandwidth bought through EnableAdditionalBandwidth.
+func (s *R_kvstoreService) DescribeKvstoreDataNodes(id string) (nodes []map[string]interface{}, err error) {
+	action := "DescribeRoleZoneInfo"
+	return collectAdditionalBandwidthNodes(func(pageNumber, pageSize int) ([]map[string]interface{}, int, error) {
+		request := map[string]interface{}{
+			"InstanceId": id,
+			"QueryType":  1,
+			"PageNumber": pageNumber,
+			"PageSize":   pageSize,
+		}
+
+		var response map[string]interface{}
+		wait := incrementalWait(3*time.Second, 3*time.Second)
+		err := retry.Retry(5*time.Minute, func() *retry.RetryError {
+			response, err = s.client.RpcPost("R-kvstore", "2015-01-01", action, nil, request, true)
+			if err != nil {
+				if NeedRetry(err) {
+					wait()
+					return retry.RetryableError(err)
+				}
+				return retry.NonRetryableError(err)
+			}
+			return nil
+		})
+		addDebug(action, response, request)
+		if err != nil {
+			return nil, 0, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+		}
+
+		pageNodeList, _ := jsonpath.Get("$.Node.NodeInfo", response)
+		pageNodes, _ := pageNodeList.([]interface{})
+		nodes := make([]map[string]interface{}, 0, len(pageNodes))
+		for _, v := range pageNodes {
+			if node, ok := v.(map[string]interface{}); ok {
+				nodes = append(nodes, node)
+			}
+		}
+
+		totalCount := 0
+		if v, ok := response["TotalCount"]; ok {
+			totalCount, _ = strconv.Atoi(fmt.Sprint(v))
+		}
+		return nodes, totalCount, nil
+	})
+}
+
+// collectAdditionalBandwidthNodes walks the DescribeRoleZoneInfo pages until every reported node
+// is collected. It is separate from the request so the paging boundary can be unit tested.
+func collectAdditionalBandwidthNodes(fetch func(pageNumber, pageSize int) ([]map[string]interface{}, int, error)) ([]map[string]interface{}, error) {
+	const pageSize = 50
+	nodes := make([]map[string]interface{}, 0)
+	for pageNumber := 1; ; pageNumber++ {
+		pageNodes, totalCount, err := fetch(pageNumber, pageSize)
+		if err != nil {
+			return nodes, err
+		}
+		nodes = append(nodes, pageNodes...)
+		if len(pageNodes) == 0 || len(nodes) >= totalCount {
+			return nodes, nil
+		}
+	}
+}
+
+// additionalBandwidthSelector returns the configured shard selector. The raw configuration is
+// only populated while a change is planned or applied, so during a plain refresh the previous
+// state is the authoritative source; otherwise a scoped selector would be lost and the read would
+// report every shard instead of the selected ones.
+func additionalBandwidthSelector(d *schema.ResourceData) string {
+	rawConfig := d.GetRawConfig()
+	if !rawConfig.IsNull() && rawConfig.IsKnown() {
+		if v := rawConfig.GetAttr("additional_bandwidth_node_id"); !v.IsNull() && v.IsKnown() {
+			return strings.TrimSpace(v.AsString())
+		}
+	}
+	if v, ok := d.GetOk("additional_bandwidth_node_id"); ok {
+		return strings.TrimSpace(v.(string))
+	}
+	return ""
+}
+
+// DescribeKvstoreShardNodeIds lists the data shard node IDs of an instance in the order returned
+// by DescribeLogicInstanceTopology. Those IDs (for example r-xxx-db-0#123456) are the NodeId
+// values EnableAdditionalBandwidth accepts.
+func (s *R_kvstoreService) DescribeKvstoreShardNodeIds(id string) (shardNodeIds []string, err error) {
+	action := "DescribeLogicInstanceTopology"
+	request := map[string]interface{}{
+		"InstanceId": id,
+	}
+
+	var response map[string]interface{}
+	wait := incrementalWait(3*time.Second, 3*time.Second)
+	err = retry.Retry(5*time.Minute, func() *retry.RetryError {
+		response, err = s.client.RpcPost("R-kvstore", "2015-01-01", action, nil, request, true)
+		if err != nil {
+			if NeedRetry(err) {
+				wait()
+				return retry.RetryableError(err)
+			}
+			return retry.NonRetryableError(err)
+		}
+		return nil
+	})
+	addDebug(action, response, request)
+	if err != nil {
+		return shardNodeIds, WrapErrorf(err, DefaultErrorMsg, id, action, AlibabaCloudSdkGoERROR)
+	}
+
+	shardList, _ := jsonpath.Get("$.RedisShardList.NodeInfo", response)
+	shards, _ := shardList.([]interface{})
+	seen := make(map[string]struct{})
+	for _, v := range shards {
+		shard, ok := v.(map[string]interface{})
+		if !ok || !strings.EqualFold(fmt.Sprint(shard["NodeType"]), "db") {
+			continue
+		}
+		nodeId := strings.TrimSpace(fmt.Sprint(shard["NodeId"]))
+		if nodeId == "" || nodeId == "<nil>" {
+			continue
+		}
+		if _, ok := seen[nodeId]; ok {
+			continue
+		}
+		seen[nodeId] = struct{}{}
+		shardNodeIds = append(shardNodeIds, nodeId)
+	}
+
+	return shardNodeIds, nil
+}
+
+// resolveAdditionalBandwidthShardSelection maps the configured additional_bandwidth_node_id to the
+// topology shard IDs accepted by EnableAdditionalBandwidth, keeping the configured order. A token
+// may be a full topology ID (r-xxx-db-0#123456) or the shard node name (r-xxx-db-0).
+func resolveAdditionalBandwidthShardSelection(shardNodeIds []string, selector string) ([]string, bool) {
+	selector = strings.TrimSpace(selector)
+	if selector == "" || strings.EqualFold(selector, "All") {
+		return shardNodeIds, true
+	}
+
+	resolved := make([]string, 0)
+	for _, token := range strings.Split(selector, ",") {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		match := ""
+		for _, shardNodeId := range shardNodeIds {
+			if shardNodeId == token {
+				match = shardNodeId
+				break
+			}
+			shardName := shardNodeId
+			if idx := strings.Index(shardNodeId, "#"); idx >= 0 {
+				shardName = shardNodeId[:idx]
+			}
+			if shardName == token {
+				match = shardNodeId
+				break
+			}
+		}
+		if match == "" {
+			return nil, false
+		}
+		resolved = append(resolved, match)
+	}
+	if len(resolved) == 0 {
+		return nil, false
+	}
+	return resolved, true
+}
+
+// buildAdditionalBandwidthState derives the additional_bandwidth value from the data nodes
+// returned by DescribeRoleZoneInfo. A shard with a replica reports both a master and a slave row,
+// so rows are grouped by node name and the master row wins; read-only nodes (InsType 3) are not
+// bandwidth targets. When the configuration selects specific shards, only those shards are
+// serialised and they keep the configured order, which is the order the write API requires. An
+// unscoped (or All) selection serialises every data shard and collapses a uniform value to a
+// single number.
+func buildAdditionalBandwidthState(nodes []map[string]interface{}, shardNodeIds []string, selector string) string {
+	extras := make(map[string]int64)
+	masters := make(map[string]bool)
+	for _, node := range nodes {
+		if fmt.Sprint(node["InsType"]) == "3" {
+			continue
+		}
+		insName := strings.TrimSpace(fmt.Sprint(node["InsName"]))
+		if insName == "" || insName == "<nil>" {
+			continue
+		}
+		defaultBandWidth, _ := strconv.ParseInt(fmt.Sprint(node["DefaultBandWidth"]), 10, 64)
+		currentBandWidth, _ := strconv.ParseInt(fmt.Sprint(node["CurrentBandWidth"]), 10, 64)
+		extra := currentBandWidth - defaultBandWidth
+		if extra < 0 {
+			extra = 0
+		}
+		isMaster := strings.EqualFold(fmt.Sprint(node["Role"]), "master")
+		if _, ok := extras[insName]; ok && !isMaster {
+			continue
+		}
+		extras[insName] = extra
+		masters[insName] = isMaster
+	}
+	if len(extras) == 0 {
+		return ""
+	}
+
+	scoped := !strings.EqualFold(strings.TrimSpace(selector), "All") && strings.TrimSpace(selector) != ""
+	selectedIds, ok := resolveAdditionalBandwidthShardSelection(shardNodeIds, selector)
+	if !ok || len(shardNodeIds) == 0 {
+		// Fall back to every data shard ordered by its node name when the topology cannot be
+		// mapped; the value still reflects the server state instead of failing the read.
+		scoped = false
+		selectedIds = nil
+	}
+
+	values := make([]int64, 0, len(extras))
+	if len(selectedIds) > 0 {
+		for _, shardNodeId := range selectedIds {
+			shardName := shardNodeId
+			if idx := strings.Index(shardNodeId, "#"); idx >= 0 {
+				shardName = shardNodeId[:idx]
+			}
+			if extra, ok := extras[shardName]; ok {
+				values = append(values, extra)
+			}
+		}
+	} else {
+		type namedExtra struct {
+			order int
+			extra int64
+		}
+		ordered := make([]namedExtra, 0, len(extras))
+		for name, extra := range extras {
+			ordered = append(ordered, namedExtra{order: shardOrdinal(name), extra: extra})
+		}
+		sort.SliceStable(ordered, func(i, j int) bool {
+			return ordered[i].order < ordered[j].order
+		})
+		for _, shard := range ordered {
+			values = append(values, shard.extra)
+		}
+	}
+	if len(values) == 0 {
+		return ""
+	}
+
+	if !scoped {
+		uniform := true
+		for _, value := range values[1:] {
+			if value != values[0] {
+				uniform = false
+				break
+			}
+		}
+		if uniform {
+			return strconv.FormatInt(values[0], 10)
+		}
+	}
+
+	formatted := make([]string, 0, len(values))
+	for _, value := range values {
+		formatted = append(formatted, strconv.FormatInt(value, 10))
+	}
+	return strings.Join(formatted, ",")
+}
+
+// shardOrdinal extracts the trailing shard number from a node name such as r-xxx-db-1, so shards
+// sort numerically instead of lexicographically (db-10 must follow db-9).
+func shardOrdinal(nodeName string) int {
+	if idx := strings.LastIndex(nodeName, "-"); idx >= 0 {
+		if ordinal, err := strconv.Atoi(nodeName[idx+1:]); err == nil {
+			return ordinal
+		}
+	}
+	return 0
+}
+
+func isClusterOrReadWriteSplitArchitecture(architectureType string) bool {
+	architecture := strings.ToLower(strings.TrimSpace(architectureType))
+	if architecture == "" {
+		return false
+	}
+	return strings.Contains(architecture, "cluster") || strings.Contains(architecture, "split")
+}
+
+// validateAdditionalBandwidthNodeId mirrors the EnableAdditionalBandwidth contract: Bandwidth may
+// only be sent without NodeId on non-cluster, non-read/write-splitting instances. A shard count
+// above one also identifies a cluster instance when the architecture field is unavailable.
+func validateAdditionalBandwidthNodeId(architectureType string, shardCount int, additionalBandwidth, nodeId string) error {
+	if strings.TrimSpace(additionalBandwidth) == "" || strings.TrimSpace(nodeId) != "" {
+		return nil
+	}
+	if isClusterOrReadWriteSplitArchitecture(architectureType) || shardCount > 1 {
+		return fmt.Errorf("additional_bandwidth_node_id must be set when additional_bandwidth is used on a cluster or read/write splitting instance (architecture type: %s, shard count: %d)", architectureType, shardCount)
+	}
+	return nil
+}
+
+// additionalBandwidthFromRawConfig returns the additional_bandwidth values the user actually
+// configured. The fields are Optional+Computed, so d.Get() would also return values that were
+// only read back from the API.
+func additionalBandwidthFromRawConfig(d *schema.ResourceData) (additionalBandwidth, additionalBandwidthNodeId string) {
+	rawConfig := d.GetRawConfig()
+	if rawConfig.IsNull() || !rawConfig.IsKnown() {
+		return "", ""
+	}
+	if v := rawConfig.GetAttr("additional_bandwidth"); !v.IsNull() && v.IsKnown() {
+		additionalBandwidth = strings.TrimSpace(v.AsString())
+	}
+	if v := rawConfig.GetAttr("additional_bandwidth_node_id"); !v.IsNull() && v.IsKnown() {
+		additionalBandwidthNodeId = strings.TrimSpace(v.AsString())
+	}
+	return additionalBandwidth, additionalBandwidthNodeId
 }

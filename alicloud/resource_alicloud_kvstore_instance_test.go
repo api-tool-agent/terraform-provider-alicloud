@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -214,7 +215,7 @@ func SkipTestAccAliCloudKVStoreRedisInstance_vpctest(t *testing.T) {
 	testAccCheck := rac.resourceAttrMapUpdateSet()
 	rand := acctest.RandIntRange(1000000, 9999999)
 	name := fmt.Sprintf("tf-testAccKvstoreRedisInstanceVpcTest%d", rand)
-	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudKVStoreRedisInstanceVpcBasicDependence0)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AliCloudKVStoreRedisInstanceVpcSecurityGroupDependence0)
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
 			testAccPreCheck(t)
@@ -3555,6 +3556,23 @@ func TestUnitKvstoreResolveMajorVersionForSpecChange(t *testing.T) {
 	}
 }
 
+func TestUnitKvstoreVpcBasicDependenceSecurityGroupIsolation(t *testing.T) {
+	name := "tf-testAccKvstoreVpcFixture"
+	networkOnly := AliCloudKVStoreRedisInstanceVpcBasicDependence0(name)
+	assert.NotContains(t, networkOnly, "alicloud_security_group")
+	assert.Contains(t, networkOnly, `data "alicloud_vpcs" "default"`)
+	assert.Contains(t, networkOnly, `data "alicloud_vswitches" "default"`)
+	assert.Contains(t, networkOnly, `data "alicloud_vswitches" "update"`)
+
+	withSecurityGroup := AliCloudKVStoreRedisInstanceVpcSecurityGroupDependence0(name)
+	assert.True(t, strings.HasPrefix(withSecurityGroup, networkOnly))
+	securityGroup := strings.TrimPrefix(withSecurityGroup, networkOnly)
+	assert.Equal(t, 1, strings.Count(securityGroup, `resource "alicloud_security_group" "default"`))
+	assert.Contains(t, securityGroup, fmt.Sprintf("name                = %q", name))
+	assert.Contains(t, securityGroup, `vpc_id              = data.alicloud_vpcs.default.ids.0`)
+	assert.Contains(t, securityGroup, `inner_access_policy = "Accept"`)
+}
+
 var AliCloudKVStoreMap0 = map[string]string{
 	"connection_domain": CHECKSET,
 	"bandwidth":         CHECKSET,
@@ -3586,18 +3604,22 @@ func AliCloudKVStoreRedisInstanceVpcBasicDependence0(name string) string {
   		zone_id = data.alicloud_kvstore_zones.default.zones.1.id
 	}
 
-	resource "alicloud_security_group" "default" {
-  		inner_access_policy = "Accept"
-  		name                = "tf-example"
-  		vpc_id              = data.alicloud_vpcs.default.ids.0
-	}
-
 resource "alicloud_redis_global_security_ip_group" "default" {
   count                = 3
   global_ip_group_name = "tfacc${count.index}"
   global_ip_list       = "192.168.0.1,10.10.10.10,172.16.0.1"
 }
 	`)
+}
+
+func AliCloudKVStoreRedisInstanceVpcSecurityGroupDependence0(name string) string {
+	return AliCloudKVStoreRedisInstanceVpcBasicDependence0(name) + fmt.Sprintf(`
+resource "alicloud_security_group" "default" {
+  inner_access_policy = "Accept"
+  name                = %q
+  vpc_id              = data.alicloud_vpcs.default.ids.0
+}
+`, name)
 }
 
 func AliCloudKVStoreRedisInstancePrePaidBasicDependence0(name string) string {
@@ -3690,4 +3712,455 @@ resource "alicloud_security_group" "default" {
 }
 `, engine, paymentType, engine, versionFilter, paymentType, strings.Join(classes, ", "), zones, name, name, name+"-update", name)
 	}
+}
+
+func TestAccAliCloudKVStoreRedisInstance_elastic_burst(t *testing.T) {
+	var v r_kvstore.DBInstanceAttribute
+	checkoutSupportedRegions(t, true, []connectivity.Region{connectivity.Hangzhou})
+	resourceId := "alicloud_kvstore_instance.default"
+	ra := resourceAttrInit(resourceId, AliCloudKVStoreMap0)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &R_kvstoreService{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeKvstoreInstance")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(1000000, 9999999)
+	name := fmt.Sprintf("tf-testAccKvstoreRedisInstanceElasticBurst%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, testAccKvstoreClassicDependence("Redis", "5.0", "PostPaid", "redis.amber.logic.sharding.1g.2db.0rodb.6proxy.multithread", "redis.amber.logic.sharding.2g.2db.0rodb.6proxy.multithread"))
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"instance_class":   "redis.amber.logic.sharding.1g.2db.0rodb.6proxy.multithread",
+					"db_instance_name": name,
+					"instance_type":    "Redis",
+					"engine_version":   "5.0",
+					"zone_id":          "${alicloud_vswitch.default.zone_id}",
+					"vswitch_id":       "${alicloud_vswitch.default.id}",
+					"shard_count":      "2",
+					"bandwidth_burst":  "true",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"instance_class":   "redis.amber.logic.sharding.1g.2db.0rodb.6proxy.multithread",
+						"db_instance_name": name,
+						"instance_type":    "Redis",
+						"engine_version":   "5.0",
+						"zone_id":          CHECKSET,
+						"vswitch_id":       CHECKSET,
+						"shard_count":      "2",
+						"bandwidth_burst":  "true",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth_burst":              "false",
+					"additional_bandwidth":         "20",
+					"additional_bandwidth_node_id": "All",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth_burst":              "false",
+						"additional_bandwidth":         "20",
+						"additional_bandwidth_node_id": "All",
+					}),
+					testAccCheckAdditionalBandwidthShardsFromApi(resourceId, "All", "20"),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"additional_bandwidth":         "30",
+					"additional_bandwidth_node_id": "All",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"additional_bandwidth":         "30",
+						"additional_bandwidth_node_id": "All",
+					}),
+					testAccCheckAdditionalBandwidthShardsFromApi(resourceId, "All", "30"),
+				),
+			},
+			{
+				// Import while non-zero bandwidth is purchased: every shard shares "30", so the
+				// imported value is recoverable without the request selector.
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"dry_run", "business_info", "coupon_no", "effective_time", "force_upgrade", "global_instance_id", "order_type", "password", "period", "enable_public", "security_ip_group_attribute", "enable_backup_log", "bandwidth_burst", "additional_bandwidth_node_id"},
+			},
+			{
+				// The contract requires NodeId for cluster and read/write splitting
+				// architectures, so the request is rejected before it reaches the API.
+				Config: testAccConfig(map[string]interface{}{
+					"additional_bandwidth":         "10",
+					"additional_bandwidth_node_id": REMOVEKEY,
+				}),
+				ExpectError: regexp.MustCompile("additional_bandwidth_node_id must be set"),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"additional_bandwidth":         "30",
+					"additional_bandwidth_node_id": "All",
+				}),
+				// The out-of-band change made by the check below leaves the plan non-empty.
+				ExpectNonEmptyPlan: true,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"additional_bandwidth":         "30",
+						"additional_bandwidth_node_id": "All",
+					}),
+					// Change the purchased bandwidth out of band; the next step's refresh must
+					// see the drift and reconcile it back to the configured value.
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceId]
+						if !ok {
+							return fmt.Errorf("can't find resource by id: %s", resourceId)
+						}
+						return testAccSetAdditionalBandwidthOutOfBand(rs.Primary.ID, "40", "All")
+					},
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"additional_bandwidth":         "30",
+					"additional_bandwidth_node_id": "All",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"additional_bandwidth":         "30",
+						"additional_bandwidth_node_id": "All",
+					}),
+					testAccCheckAdditionalBandwidthShardsFromApi(resourceId, "All", "30"),
+				),
+			},
+			{
+				// Explicit "0" is the documented release path for the purchased bandwidth.
+				Config: testAccConfig(map[string]interface{}{
+					"additional_bandwidth":         "0",
+					"additional_bandwidth_node_id": "All",
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"additional_bandwidth":         "0",
+						"additional_bandwidth_node_id": "All",
+					}),
+					testAccCheckAdditionalBandwidthShardsFromApi(resourceId, "All", "0"),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"bandwidth_burst":              REMOVEKEY,
+					"additional_bandwidth":         REMOVEKEY,
+					"additional_bandwidth_node_id": REMOVEKEY,
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"bandwidth_burst":              REMOVEKEY,
+						"additional_bandwidth":         REMOVEKEY,
+						"additional_bandwidth_node_id": REMOVEKEY,
+					}),
+				),
+			},
+			{
+				ResourceName:            resourceId,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"dry_run", "business_info", "coupon_no", "effective_time", "force_upgrade", "global_instance_id", "order_type", "password", "period", "enable_public", "security_ip_group_attribute", "enable_backup_log", "bandwidth_burst", "additional_bandwidth_node_id"},
+			},
+		},
+	})
+}
+
+// testAccSetAdditionalBandwidthOutOfBand changes the purchased bandwidth outside Terraform and
+// verifies the change through DescribeRoleZoneInfo, so a later Terraform run can be shown to
+// detect and reconcile the drift.
+func testAccSetAdditionalBandwidthOutOfBand(instanceId, bandwidth, nodeId string) error {
+	client := testAccProvider.Meta().(*connectivity.AliyunClient)
+	request := map[string]interface{}{
+		"InstanceId": instanceId,
+		"ChargeType": "PostPaid",
+		"Bandwidth":  bandwidth,
+		"NodeId":     nodeId,
+	}
+	if _, err := client.RpcPost("R-kvstore", "2015-01-01", "EnableAdditionalBandwidth", nil, request, false); err != nil {
+		return fmt.Errorf("out-of-band EnableAdditionalBandwidth(%s) failed: %s", bandwidth, err)
+	}
+
+	service := R_kvstoreService{client}
+	// The instance must be back to Normal before another bandwidth request is accepted;
+	// waiting only for the order flag leaves it in a transient status.
+	statusConf := BuildStateConf([]string{}, []string{"Normal"}, 15*time.Minute, 10*time.Second, service.KvstoreInstanceAttributeRefreshFunc(instanceId, "InstanceStatus"))
+	if _, err := statusConf.WaitForState(); err != nil {
+		return fmt.Errorf("waiting for the instance to become Normal after out-of-band EnableAdditionalBandwidth(%s) failed: %s", bandwidth, err)
+	}
+	stateConf := BuildStateConf([]string{}, []string{"true"}, 10*time.Minute, 10*time.Second, service.KvstoreInstanceAttributeRefreshFunc(instanceId, "IsOrderCompleted"))
+	if _, err := stateConf.WaitForState(); err != nil {
+		return fmt.Errorf("waiting for out-of-band EnableAdditionalBandwidth(%s) failed: %s", bandwidth, err)
+	}
+
+	nodes, err := service.DescribeKvstoreDataNodes(instanceId)
+	if err != nil {
+		return err
+	}
+	shardNodeIds, err := service.DescribeKvstoreShardNodeIds(instanceId)
+	if err != nil {
+		return err
+	}
+	if actual := buildAdditionalBandwidthState(nodes, shardNodeIds, nodeId); actual != bandwidth {
+		return fmt.Errorf("expected out-of-band server-side additional bandwidth %q, got %q", bandwidth, actual)
+	}
+	return nil
+}
+
+// testAccCheckAdditionalBandwidthShardsFromApi asserts the additional bandwidth reported by the
+// read-only DescribeRoleZoneInfo API for the selected shards. The per-shard derivation and the
+// selector resolution are implemented here instead of reusing the production normaliser, so the
+// assertion can detect a normalisation defect. shardSelector uses short node names such as
+// "db-0" or "db-1,db-0", or "All".
+func testAccCheckAdditionalBandwidthShardsFromApi(resourceId, shardSelector, expected string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceId]
+		if !ok {
+			return fmt.Errorf("can't find resource by id: %s", resourceId)
+		}
+		client := testAccProvider.Meta().(*connectivity.AliyunClient)
+		service := R_kvstoreService{client}
+		nodes, err := service.DescribeKvstoreDataNodes(rs.Primary.ID)
+		if err != nil {
+			return err
+		}
+		shardNodeIds, err := service.DescribeKvstoreShardNodeIds(rs.Primary.ID)
+		if err != nil {
+			return err
+		}
+
+		extras := make(map[string]int64)
+		for _, node := range nodes {
+			if fmt.Sprint(node["InsType"]) == "3" {
+				continue
+			}
+			if !strings.EqualFold(fmt.Sprint(node["Role"]), "master") {
+				continue
+			}
+			defaultBandWidth, _ := strconv.ParseInt(fmt.Sprint(node["DefaultBandWidth"]), 10, 64)
+			currentBandWidth, _ := strconv.ParseInt(fmt.Sprint(node["CurrentBandWidth"]), 10, 64)
+			extra := currentBandWidth - defaultBandWidth
+			if extra < 0 {
+				extra = 0
+			}
+			extras[fmt.Sprint(node["InsName"])] = extra
+		}
+
+		var selectedNames []string
+		scoped := !strings.EqualFold(shardSelector, "All")
+		if scoped {
+			for _, token := range strings.Split(shardSelector, ",") {
+				token = strings.TrimSpace(token)
+				matched := ""
+				for _, shardNodeId := range shardNodeIds {
+					shardName := shardNodeId
+					if idx := strings.Index(shardNodeId, "#"); idx >= 0 {
+						shardName = shardNodeId[:idx]
+					}
+					if shardName == token || strings.HasSuffix(shardName, "-"+token) {
+						matched = shardName
+						break
+					}
+				}
+				if matched == "" {
+					return fmt.Errorf("selector %q does not match any shard; topology shards: %v", token, shardNodeIds)
+				}
+				selectedNames = append(selectedNames, matched)
+			}
+		} else {
+			for _, shardNodeId := range shardNodeIds {
+				shardName := shardNodeId
+				if idx := strings.Index(shardNodeId, "#"); idx >= 0 {
+					shardName = shardNodeId[:idx]
+				}
+				selectedNames = append(selectedNames, shardName)
+			}
+		}
+
+		values := make([]string, 0, len(selectedNames))
+		for _, shardName := range selectedNames {
+			extra, ok := extras[shardName]
+			if !ok {
+				return fmt.Errorf("no bandwidth row for shard %s; rows: %v", shardName, extras)
+			}
+			values = append(values, strconv.FormatInt(extra, 10))
+		}
+		if len(values) == 0 {
+			return fmt.Errorf("no shard values collected for %s", rs.Primary.ID)
+		}
+		actual := strings.Join(values, ",")
+		if !scoped {
+			uniform := true
+			for _, value := range values[1:] {
+				if value != values[0] {
+					uniform = false
+					break
+				}
+			}
+			if uniform {
+				actual = values[0]
+			}
+		}
+		if actual != expected {
+			return fmt.Errorf("expected server-side additional bandwidth %q for shards %q, got %q", expected, shardSelector, actual)
+		}
+		return nil
+	}
+}
+
+func TestUnitKvstoreAdditionalBandwidthNodeIdValidation(t *testing.T) {
+	testCases := []struct {
+		name                string
+		architectureType    string
+		shardCount          int
+		additionalBandwidth string
+		nodeId              string
+		expectedError       bool
+	}{
+		{name: "cluster without node id", architectureType: "cluster", additionalBandwidth: "10", expectedError: true},
+		{name: "read/write split without node id", architectureType: "SplitRW", additionalBandwidth: "10", expectedError: true},
+		{name: "tair rwsplit without node id", architectureType: "rwsplit", additionalBandwidth: "10", expectedError: true},
+		{name: "multiple shards without node id", architectureType: "standard", shardCount: 2, additionalBandwidth: "10", expectedError: true},
+		{name: "cluster with node id", architectureType: "cluster", additionalBandwidth: "10", nodeId: "All"},
+		{name: "standard single shard without node id", architectureType: "standard", shardCount: 1, additionalBandwidth: "10"},
+		{name: "burst only on cluster", architectureType: "cluster"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateAdditionalBandwidthNodeId(tc.architectureType, tc.shardCount, tc.additionalBandwidth, tc.nodeId)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestUnitKvstoreAdditionalBandwidthState(t *testing.T) {
+	node := func(insName, role string, defaultBandWidth, currentBandWidth int64) map[string]interface{} {
+		return map[string]interface{}{
+			"CustinsId":        insName + "-shard",
+			"InsName":          insName,
+			"Role":             role,
+			"DefaultBandWidth": defaultBandWidth,
+			"CurrentBandWidth": currentBandWidth,
+		}
+	}
+	topology := []string{"r-x-db-0#100", "r-x-db-1#101", "r-x-db-10#102"}
+
+	assert.Equal(t, "", buildAdditionalBandwidthState(nil, topology, "All"))
+	assert.Equal(t, "4", buildAdditionalBandwidthState([]map[string]interface{}{
+		node("r-x-db-0", "master", 96, 100),
+	}, topology, "All"))
+	// A shard reports a master and a slave row; the master row is used once per shard.
+	assert.Equal(t, "20", buildAdditionalBandwidthState([]map[string]interface{}{
+		node("r-x-db-0", "SLAVE", 96, 116),
+		node("r-x-db-0", "MASTER", 96, 116),
+		node("r-x-db-1", "MASTER", 96, 116),
+		node("r-x-db-1", "SLAVE", 96, 116),
+	}, topology, "All"))
+	// All-scoped non-uniform values follow the topology order.
+	assert.Equal(t, "20,30", buildAdditionalBandwidthState([]map[string]interface{}{
+		node("r-x-db-1", "MASTER", 96, 126),
+		node("r-x-db-0", "MASTER", 96, 116),
+	}, []string{"r-x-db-0#100", "r-x-db-1#101"}, "All"))
+	// A configured subset serialises only the selected shard.
+	assert.Equal(t, "20", buildAdditionalBandwidthState([]map[string]interface{}{
+		node("r-x-db-0", "MASTER", 96, 116),
+		node("r-x-db-1", "MASTER", 96, 126),
+	}, topology, "r-x-db-0#100"))
+	// A configured multi-shard selection keeps the configured order, not the shard order.
+	assert.Equal(t, "30,20", buildAdditionalBandwidthState([]map[string]interface{}{
+		node("r-x-db-0", "MASTER", 96, 116),
+		node("r-x-db-1", "MASTER", 96, 126),
+	}, topology, "r-x-db-1,r-x-db-0"))
+	// Uniform values are not collapsed when specific shards are configured.
+	assert.Equal(t, "20,20", buildAdditionalBandwidthState([]map[string]interface{}{
+		node("r-x-db-0", "MASTER", 96, 116),
+		node("r-x-db-1", "MASTER", 96, 116),
+	}, topology, "r-x-db-1,r-x-db-0"))
+	// Unknown selectors fall back to the full server-side view instead of failing the read.
+	assert.Equal(t, "20,30", buildAdditionalBandwidthState([]map[string]interface{}{
+		node("r-x-db-0", "MASTER", 96, 116),
+		node("r-x-db-1", "MASTER", 96, 126),
+	}, topology, "r-x-db-9"))
+
+	readOnly := node("r-x-db-0", "MASTER", 96, 200)
+	readOnly["InsType"] = 3
+	assert.Equal(t, "", buildAdditionalBandwidthState([]map[string]interface{}{readOnly}, topology, "All"))
+
+	belowDefault := node("r-x-db-0", "MASTER", 96, 90)
+	assert.Equal(t, "0", buildAdditionalBandwidthState([]map[string]interface{}{belowDefault}, topology, "All"))
+}
+
+func TestUnitKvstoreAdditionalBandwidthPagination(t *testing.T) {
+	pages := [][]map[string]interface{}{
+		{{"InsName": "r-x-db-0"}, {"InsName": "r-x-db-1"}},
+		{{"InsName": "r-x-db-2"}},
+	}
+	var requested []int
+	nodes, err := collectAdditionalBandwidthNodes(func(pageNumber, pageSize int) ([]map[string]interface{}, int, error) {
+		requested = append(requested, pageNumber)
+		if pageNumber > len(pages) {
+			return nil, 3, nil
+		}
+		return pages[pageNumber-1], 3, nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{1, 2}, requested)
+	assert.Len(t, nodes, 3)
+
+	// An empty page stops the walk even when TotalCount is larger than what was returned.
+	requested = nil
+	nodes, err = collectAdditionalBandwidthNodes(func(pageNumber, pageSize int) ([]map[string]interface{}, int, error) {
+		requested = append(requested, pageNumber)
+		return nil, 10, nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []int{1}, requested)
+	assert.Empty(t, nodes)
+
+	// A page error is surfaced.
+	_, err = collectAdditionalBandwidthNodes(func(pageNumber, pageSize int) ([]map[string]interface{}, int, error) {
+		if pageNumber == 2 {
+			return nil, 0, fmt.Errorf("boom")
+		}
+		return []map[string]interface{}{{"InsName": "r-x-db-0"}}, 2, nil
+	})
+	assert.Error(t, err)
+}
+
+func TestUnitKvstoreAdditionalBandwidthShardSelection(t *testing.T) {
+	topology := []string{"r-x-db-0#100", "r-x-db-1#101"}
+
+	selected, ok := resolveAdditionalBandwidthShardSelection(topology, "")
+	assert.True(t, ok)
+	assert.Equal(t, topology, selected)
+
+	selected, ok = resolveAdditionalBandwidthShardSelection(topology, "All")
+	assert.True(t, ok)
+	assert.Equal(t, topology, selected)
+
+	selected, ok = resolveAdditionalBandwidthShardSelection(topology, "r-x-db-1")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"r-x-db-1#101"}, selected)
+
+	selected, ok = resolveAdditionalBandwidthShardSelection(topology, "r-x-db-1#101,r-x-db-0#100")
+	assert.True(t, ok)
+	assert.Equal(t, []string{"r-x-db-1#101", "r-x-db-0#100"}, selected)
+
+	_, ok = resolveAdditionalBandwidthShardSelection(topology, "r-x-db-9")
+	assert.False(t, ok)
 }
