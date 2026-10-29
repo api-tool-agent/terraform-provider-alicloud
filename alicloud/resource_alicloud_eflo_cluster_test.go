@@ -323,3 +323,111 @@ variable "name" {
 
 `, name)
 }
+
+func TestAccAliCloudEfloCluster_nodeGroups(t *testing.T) {
+	t.Skip("Node group, hyper node and data disk parameters need a provisioned Eflo (Lingjun) cluster plus account-level machine types; the schema wiring is kept covered statically until the test account provides them.")
+	var v map[string]interface{}
+	resourceId := "alicloud_eflo_cluster.default"
+	ra := resourceAttrInit(resourceId, AlicloudEfloClusterMapNodeGroups)
+	rc := resourceCheckInitWithDescribeMethod(resourceId, &v, func() interface{} {
+		return &EfloServiceV2{testAccProvider.Meta().(*connectivity.AliyunClient)}
+	}, "DescribeEfloCluster")
+	rac := resourceAttrCheckInit(rc, ra)
+	testAccCheck := rac.resourceAttrMapUpdateSet()
+	rand := acctest.RandIntRange(10000, 99999)
+	name := fmt.Sprintf("tfacceflo%d", rand)
+	testAccConfig := resourceTestAccConfigFunc(resourceId, name, AlicloudEfloClusterBasicDependence10311)
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+		},
+		ProviderFactories: testAccProviderFactory,
+		CheckDestroy:      rac.checkResourceDestroy(),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"hpn_zone": "B1",
+					"components": []map[string]interface{}{
+						{
+							"component_type": "ACKEdge",
+							"component_config": []map[string]interface{}{
+								{
+									"basic_args": "e30=",
+									"node_units": []string{"ng-xxxxxxxx"},
+								},
+							},
+						},
+					},
+					"node_groups": []map[string]interface{}{
+						{
+							"node_group_name":           name,
+							"node_group_description":    "tf acc node group",
+							"zone_id":                   "cn-wulanchabu-b",
+							"machine_type":              "efg2.C48cA3sen",
+							"image_id":                  "m-xxxxxxxx",
+							"user_data":                 "dGVzdA==",
+							"file_system_mount_enabled": "true",
+							"key_pair_name":             name,
+							"login_password":            "Tfacc123456!",
+							"ram_role_name":             name,
+							"virtual_gpu_enabled":       "false",
+							"system_disk": []map[string]interface{}{
+								{
+									"category":          "cloud_essd",
+									"performance_level": "PL1",
+									"size":              "240",
+								},
+							},
+							"hyper_nodes": []map[string]interface{}{
+								{
+									"hyper_node_id":  "i-xxxxxxxx",
+									"hostname":       "tfacchypernode",
+									"vpc_id":         "${alicloud_vpc.create_vpc.id}",
+									"vswitch_id":     "${alicloud_vswitch.create_vswitch.id}",
+									"login_password": "Tfacc123456!",
+									"data_disk": []map[string]interface{}{
+										{
+											"bursting_enabled":  "true",
+											"category":          "cloud_essd",
+											"delete_with_node":  "true",
+											"performance_level": "PL1",
+											"provisioned_iops":  "50000",
+											"size":              "120",
+										},
+									},
+								},
+							},
+							"nodes": []map[string]interface{}{
+								{
+									"vpc_id":         "${alicloud_vpc.create_vpc.id}",
+									"vswitch_id":     "${alicloud_vswitch.create_vswitch.id}",
+									"node_id":        "i-xxxxxxxx",
+									"hostname":       "tfaccnode",
+									"login_password": "Tfacc123456!",
+									"data_disk": []map[string]interface{}{
+										{
+											"bursting_enabled":  "true",
+											"category":          "cloud_essd",
+											"delete_with_node":  "true",
+											"performance_level": "PL1",
+											"provisioned_iops":  "50000",
+											"size":              "120",
+										},
+									},
+								},
+							},
+						},
+					},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{}),
+				),
+			},
+		},
+	})
+}
+
+var AlicloudEfloClusterMapNodeGroups = map[string]string{
+	"status":      CHECKSET,
+	"create_time": CHECKSET,
+}

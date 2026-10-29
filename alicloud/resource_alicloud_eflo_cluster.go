@@ -312,6 +312,110 @@ func resourceAliCloudEfloCluster() *schema.Resource {
 							Type:     schema.TypeString,
 							Optional: true,
 						},
+						"file_system_mount_enabled": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+						"key_pair_name": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"login_password": {
+							Type:      schema.TypeString,
+							Optional:  true,
+							Sensitive: true,
+						},
+						"ram_role_name": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"virtual_gpu_enabled": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+						"system_disk": {
+							Type:     schema.TypeList,
+							Optional: true,
+							MaxItems: 1,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"category": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"performance_level": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"size": {
+										Type:     schema.TypeInt,
+										Optional: true,
+									},
+								},
+							},
+						},
+						"hyper_nodes": {
+							Type:     schema.TypeList,
+							Optional: true,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"hyper_node_id": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"hostname": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"vpc_id": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"vswitch_id": {
+										Type:     schema.TypeString,
+										Optional: true,
+									},
+									"login_password": {
+										Type:      schema.TypeString,
+										Optional:  true,
+										Sensitive: true,
+									},
+									"data_disk": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"bursting_enabled": {
+													Type:     schema.TypeBool,
+													Optional: true,
+												},
+												"category": {
+													Type:     schema.TypeString,
+													Optional: true,
+												},
+												"delete_with_node": {
+													Type:     schema.TypeBool,
+													Optional: true,
+													Default:  true,
+												},
+												"performance_level": {
+													Type:     schema.TypeString,
+													Optional: true,
+												},
+												"provisioned_iops": {
+													Type:     schema.TypeInt,
+													Optional: true,
+												},
+												"size": {
+													Type:     schema.TypeInt,
+													Optional: true,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
 						"nodes": {
 							Type:     schema.TypeList,
 							Optional: true,
@@ -329,6 +433,10 @@ func resourceAliCloudEfloCluster() *schema.Resource {
 										Type:     schema.TypeString,
 										Optional: true,
 									},
+									"node_group_id": {
+										Type:     schema.TypeString,
+										Computed: true,
+									},
 									"hostname": {
 										Type:     schema.TypeString,
 										Optional: true,
@@ -336,6 +444,39 @@ func resourceAliCloudEfloCluster() *schema.Resource {
 									"login_password": {
 										Type:     schema.TypeString,
 										Optional: true,
+									},
+									"data_disk": {
+										Type:     schema.TypeList,
+										Optional: true,
+										Elem: &schema.Resource{
+											Schema: map[string]*schema.Schema{
+												"bursting_enabled": {
+													Type:     schema.TypeBool,
+													Optional: true,
+												},
+												"category": {
+													Type:     schema.TypeString,
+													Optional: true,
+												},
+												"delete_with_node": {
+													Type:     schema.TypeBool,
+													Optional: true,
+													Default:  true,
+												},
+												"performance_level": {
+													Type:     schema.TypeString,
+													Optional: true,
+												},
+												"provisioned_iops": {
+													Type:     schema.TypeInt,
+													Optional: true,
+												},
+												"size": {
+													Type:     schema.TypeInt,
+													Optional: true,
+												},
+											},
+										},
 									},
 								},
 							},
@@ -562,6 +703,25 @@ func resourceAliCloudEfloClusterCreate(d *schema.ResourceData, meta interface{})
 			dataLoop8Map["UserData"] = dataLoop8Tmp["user_data"]
 			dataLoop8Map["ZoneId"] = dataLoop8Tmp["zone_id"]
 			dataLoop8Map["NodeGroupDescription"] = dataLoop8Tmp["node_group_description"]
+			dataLoop8Map["FileSystemMountEnabled"] = dataLoop8Tmp["file_system_mount_enabled"]
+			dataLoop8Map["KeyPairName"] = dataLoop8Tmp["key_pair_name"]
+			dataLoop8Map["LoginPassword"] = dataLoop8Tmp["login_password"]
+			dataLoop8Map["RamRoleName"] = dataLoop8Tmp["ram_role_name"]
+			dataLoop8Map["VirtualGpuEnabled"] = dataLoop8Tmp["virtual_gpu_enabled"]
+			systemDiskMaps := make([]interface{}, 0)
+			if systemDiskList, ok := dataLoop8Tmp["system_disk"].([]interface{}); ok {
+				for _, systemDisk := range systemDiskList {
+					systemDiskTmp := systemDisk.(map[string]interface{})
+					systemDiskMap := make(map[string]interface{})
+					systemDiskMap["Category"] = systemDiskTmp["category"]
+					systemDiskMap["PerformanceLevel"] = systemDiskTmp["performance_level"]
+					systemDiskMap["Size"] = systemDiskTmp["size"]
+					systemDiskMaps = append(systemDiskMaps, systemDiskMap)
+				}
+			}
+			if len(systemDiskMaps) > 0 {
+				dataLoop8Map["SystemDisk"] = systemDiskMaps[0]
+			}
 			localMaps8 := make([]interface{}, 0)
 			localData9 := dataLoop8Tmp["nodes"]
 			for _, dataLoop9 := range localData9.([]interface{}) {
@@ -572,9 +732,59 @@ func resourceAliCloudEfloClusterCreate(d *schema.ResourceData, meta interface{})
 				dataLoop9Map["VpcId"] = dataLoop9Tmp["vpc_id"]
 				dataLoop9Map["NodeId"] = dataLoop9Tmp["node_id"]
 				dataLoop9Map["LoginPassword"] = dataLoop9Tmp["login_password"]
+				nodeDataDiskMaps := make([]interface{}, 0)
+				if nodeDataDiskList, ok := dataLoop9Tmp["data_disk"].([]interface{}); ok {
+					for _, nodeDataDisk := range nodeDataDiskList {
+						nodeDataDiskTmp := nodeDataDisk.(map[string]interface{})
+						nodeDataDiskMap := make(map[string]interface{})
+						nodeDataDiskMap["BurstingEnabled"] = nodeDataDiskTmp["bursting_enabled"]
+						nodeDataDiskMap["Category"] = nodeDataDiskTmp["category"]
+						nodeDataDiskMap["DeleteWithNode"] = nodeDataDiskTmp["delete_with_node"]
+						nodeDataDiskMap["PerformanceLevel"] = nodeDataDiskTmp["performance_level"]
+						nodeDataDiskMap["ProvisionedIops"] = nodeDataDiskTmp["provisioned_iops"]
+						nodeDataDiskMap["Size"] = nodeDataDiskTmp["size"]
+						nodeDataDiskMaps = append(nodeDataDiskMaps, nodeDataDiskMap)
+					}
+				}
+				if len(nodeDataDiskMaps) > 0 {
+					dataLoop9Map["DataDisk"] = nodeDataDiskMaps
+				}
 				localMaps8 = append(localMaps8, dataLoop9Map)
 			}
 			dataLoop8Map["Nodes"] = localMaps8
+			hyperNodesMaps := make([]interface{}, 0)
+			if hyperNodesList, ok := dataLoop8Tmp["hyper_nodes"].([]interface{}); ok {
+				for _, hyperNode := range hyperNodesList {
+					hyperNodeTmp := hyperNode.(map[string]interface{})
+					hyperNodeMap := make(map[string]interface{})
+					hyperNodeMap["HyperNodeId"] = hyperNodeTmp["hyper_node_id"]
+					hyperNodeMap["Hostname"] = hyperNodeTmp["hostname"]
+					hyperNodeMap["VpcId"] = hyperNodeTmp["vpc_id"]
+					hyperNodeMap["VSwitchId"] = hyperNodeTmp["vswitch_id"]
+					hyperNodeMap["LoginPassword"] = hyperNodeTmp["login_password"]
+					hyperNodeDataDiskMaps := make([]interface{}, 0)
+					if hyperNodeDataDiskList, ok := hyperNodeTmp["data_disk"].([]interface{}); ok {
+						for _, hyperNodeDataDisk := range hyperNodeDataDiskList {
+							hyperNodeDataDiskTmp := hyperNodeDataDisk.(map[string]interface{})
+							hyperNodeDataDiskMap := make(map[string]interface{})
+							hyperNodeDataDiskMap["BurstingEnabled"] = hyperNodeDataDiskTmp["bursting_enabled"]
+							hyperNodeDataDiskMap["Category"] = hyperNodeDataDiskTmp["category"]
+							hyperNodeDataDiskMap["DeleteWithNode"] = hyperNodeDataDiskTmp["delete_with_node"]
+							hyperNodeDataDiskMap["PerformanceLevel"] = hyperNodeDataDiskTmp["performance_level"]
+							hyperNodeDataDiskMap["ProvisionedIops"] = hyperNodeDataDiskTmp["provisioned_iops"]
+							hyperNodeDataDiskMap["Size"] = hyperNodeDataDiskTmp["size"]
+							hyperNodeDataDiskMaps = append(hyperNodeDataDiskMaps, hyperNodeDataDiskMap)
+						}
+					}
+					if len(hyperNodeDataDiskMaps) > 0 {
+						hyperNodeMap["DataDisk"] = hyperNodeDataDiskMaps
+					}
+					hyperNodesMaps = append(hyperNodesMaps, hyperNodeMap)
+				}
+			}
+			if len(hyperNodesMaps) > 0 {
+				dataLoop8Map["HyperNodes"] = hyperNodesMaps
+			}
 			dataLoop8Map["NodeGroupName"] = dataLoop8Tmp["node_group_name"]
 			dataLoop8Map["MachineType"] = dataLoop8Tmp["machine_type"]
 			dataLoop8Map["ImageId"] = dataLoop8Tmp["image_id"]

@@ -138,12 +138,12 @@ The following arguments are supported:
 * `cluster_description` - (Optional, ForceNew) cluster description
 * `cluster_name` - (Optional, ForceNew) ClusterName
 * `cluster_type` - (Optional, ForceNew) cluster type
-* `components` - (Optional, List) Component (software instance) See [`components`](#components) below.
+* `components` - (Optional, List) Component (software instance) See [`components`](#components) below. **Note: The parameter is immutable after resource creation.**
 * `hpn_zone` - (Optional) Cluster Number
 * `ignore_failed_node_tasks` - (Optional) Whether to allow skipping failed nodes. Default value: False
-* `networks` - (Optional, List) Network Information See [`networks`](#networks) below.
+* `networks` - (Optional, List) Network Information See [`networks`](#networks) below. **Note: The parameter is immutable after resource creation.**
 * `nimiz_vswitches` - (Optional, List) Node virtual switch
-* `node_groups` - (Optional, List) Node Group List See [`node_groups`](#node_groups) below.
+* `node_groups` - (Optional, List) Node Group List See [`node_groups`](#node_groups) below. **Note: The parameter is immutable after resource creation.**
 * `open_eni_jumbo_frame` - (Optional) Whether the network interface supports jumbo frames
 * `resource_group_id` - (Optional, Computed) The ID of the resource group
 * `tags` - (Optional, Map) tag
@@ -243,22 +243,68 @@ The networks-ip_allocation_policy-bond_policy-bonds supports the following:
 ### `node_groups`
 
 The node_groups supports the following:
+* `file_system_mount_enabled` - (Optional) Whether the node group supports file system mounting.
+* `hyper_nodes` - (Optional, List) Hyper node list See [`hyper_nodes`](#node_groups-hyper_nodes) below.
 * `image_id` - (Optional) System Image ID
+* `key_pair_name` - (Optional) The name of the key pair that is used to log on to the nodes.
+* `login_password` - (Optional) The password that is used to log on to the nodes.
 * `machine_type` - (Optional) Model
 * `node_group_description` - (Optional) Node Group Description
 * `node_group_name` - (Optional) Node Group Name
 * `nodes` - (Optional, List) Node List See [`nodes`](#node_groups-nodes) below.
+* `ram_role_name` - (Optional) The name of the Resource Access Management (RAM) role that is assigned to the nodes.
+* `system_disk` - (Optional, List) System disk configuration See [`system_disk`](#node_groups-system_disk) below.
 * `user_data` - (Optional) Instance custom data. It needs to be encoded in Base64 mode, and the original data is at most 16KB.
+* `virtual_gpu_enabled` - (Optional) Whether GPU virtualization is enabled for the node group.
 * `zone_id` - (Optional) Zone ID
+
+### `node_groups-system_disk`
+
+The node_groups-system_disk supports the following:
+* `category` - (Optional) The type of the system disk.
+* `performance_level` - (Optional) The performance level of the system disk.
+* `size` - (Optional) The size of the system disk. Unit: GiB.
+
+### `node_groups-hyper_nodes`
+
+The node_groups-hyper_nodes supports the following:
+* `data_disk` - (Optional, List) Data disk list See [`data_disk`](#node_groups-hyper_nodes-data_disk) below.
+* `hostname` - (Optional) Host name
+* `hyper_node_id` - (Optional) Hyper node ID
+* `login_password` - (Optional) Login Password
+* `vpc_id` - (Optional) VPC ID
+* `vswitch_id` - (Optional) Virtual Switch ID
+
+### `node_groups-hyper_nodes-data_disk`
+
+The node_groups-hyper_nodes-data_disk supports the following:
+* `bursting_enabled` - (Optional) Whether the data disk has the burst feature enabled.
+* `category` - (Optional) The type of the data disk.
+* `delete_with_node` - (Optional) Whether the data disk is released together with the node.
+* `performance_level` - (Optional) The performance level of the data disk.
+* `provisioned_iops` - (Optional) The provisioned IOPS of the data disk.
+* `size` - (Optional) The size of the data disk. Unit: GiB.
 
 ### `node_groups-nodes`
 
 The node_groups-nodes supports the following:
+* `data_disk` - (Optional, List) Data disk list See [`data_disk`](#node_groups-nodes-data_disk) below.
 * `hostname` - (Optional) Host name
 * `login_password` - (Optional) Login Password
+* `node_group_id` - (Computed) Node Group ID
 * `node_id` - (Optional) Node ID
 * `vswitch_id` - (Optional) Virtual Switch ID
 * `vpc_id` - (Optional) VPC ID
+
+### `node_groups-nodes-data_disk`
+
+The node_groups-nodes-data_disk supports the following:
+* `bursting_enabled` - (Optional) Whether the data disk has the burst feature enabled.
+* `category` - (Optional) The type of the data disk.
+* `delete_with_node` - (Optional) Whether the data disk is released together with the node.
+* `performance_level` - (Optional) The performance level of the data disk.
+* `provisioned_iops` - (Optional) The provisioned IOPS of the data disk.
+* `size` - (Optional) The size of the data disk. Unit: GiB.
 
 ## Attributes Reference
 
