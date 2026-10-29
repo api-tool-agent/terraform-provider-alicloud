@@ -2,6 +2,7 @@
 
 FEATURES:
 
+- **New Resource:** `alicloud_polardb_aidb_cluster_dataset` — manages a dataset of a PolarDB AI cluster.
 - **New Ephemeral Resource:** `alicloud_sts_token` — fetches a temporary access credential by assuming a RAM role through the `AssumeRole` API without persisting it to the state or plan, for use in a second provider instance, provisioners, write-only attributes, and other ephemeral resources. Requires Terraform 1.10 or later. Served by the framework provider.
 
 ## 2.0.0 (October 12, 2026)
