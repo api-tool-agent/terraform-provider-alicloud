@@ -61,7 +61,7 @@ func testSweepEciImageCache(region string) error {
 	return nil
 }
 
-func TestAccAlicloudEciImageCache_basic(t *testing.T) {
+func TestAccAliCloudEciImageCache_basic(t *testing.T) {
 	var v eci.DescribeImageCachesImageCache0
 	checkoutSupportedRegions(t, true, connectivity.EciContainerGroupRegions)
 	resourceId := "alicloud_eci_image_cache.default"
@@ -84,19 +84,85 @@ func TestAccAlicloudEciImageCache_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccConfig(map[string]interface{}{
-					"image_cache_name":  strings.ToLower(name),
-					"images":            []string{fmt.Sprintf("registry-vpc.%s.aliyuncs.com/eci_open/nginx:alpine", defaultRegionToTest)},
-					"security_group_id": "${alicloud_security_group.group.id}",
-					"vswitch_id":        "${data.alicloud_vpcs.default.vpcs.0.vswitch_ids.0}",
-					"eip_instance_id":   "${alicloud_eip_address.default.id}",
-					"resource_group_id": "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
-					"depends_on ":       []string{"alicloud_eip_address.default"},
+					"image_cache_name":       strings.ToLower(name),
+					"images":                 []string{fmt.Sprintf("registry-vpc.%s.aliyuncs.com/eci_open/nginx:alpine", defaultRegionToTest)},
+					"security_group_id":      "${alicloud_security_group.group.id}",
+					"vswitch_id":             "${data.alicloud_vpcs.default.vpcs.0.vswitch_ids.0}",
+					"eip_instance_id":        "${alicloud_eip_address.default.id}",
+					"resource_group_id":      "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					"image_cache_size":       "20",
+					"retention_days":         "1",
+					"zone_id":                "${data.alicloud_vswitches.default.vswitches.0.zone_id}",
+					"auto_match_image_cache": "false",
+					"flash":                  "false",
+					"flash_copy_count":       "1",
+					"standard_copy_count":    "1",
+					"elimination_strategy":   "LRU",
+					"os_type":                "Linux",
+					"insecure_registry":      "harbor.example.com",
+					"plain_http_registry":    "harbor.example.com",
+					"depends_on ":            []string{"alicloud_eip_address.default"},
 				}),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheck(map[string]string{
-						"image_cache_name":  strings.ToLower(name),
-						"images.#":          "1",
-						"resource_group_id": CHECKSET,
+						"image_cache_name":       strings.ToLower(name),
+						"images.#":               "1",
+						"resource_group_id":      CHECKSET,
+						"elimination_strategy":   "LRU",
+						"os_type":                "Linux",
+						"insecure_registry":      "harbor.example.com",
+						"plain_http_registry":    "harbor.example.com",
+						"auto_match_image_cache": "false",
+						"flash":                  "false",
+					}),
+				),
+			},
+			{
+				Config: testAccConfig(map[string]interface{}{
+					"image_cache_name":     strings.ToLower(name),
+					"images":               []string{fmt.Sprintf("registry-vpc.%s.aliyuncs.com/eci_open/nginx:alpine", defaultRegionToTest)},
+					"security_group_id":    "${alicloud_security_group.group.id}",
+					"vswitch_id":           "${data.alicloud_vpcs.default.vpcs.0.vswitch_ids.0}",
+					"eip_instance_id":      "${alicloud_eip_address.default.id}",
+					"resource_group_id":    "${data.alicloud_resource_manager_resource_groups.default.groups.0.id}",
+					"image_cache_size":     "20",
+					"retention_days":       "1",
+					"zone_id":              "${data.alicloud_vswitches.default.vswitches.0.zone_id}",
+					"flash_copy_count":     "1",
+					"standard_copy_count":  "1",
+					"elimination_strategy": "LRU",
+					"os_type":              "Linux",
+					"insecure_registry":    "harbor.example.com",
+					"plain_http_registry":  "harbor.example.com",
+					"acr_registry_info": []map[string]interface{}{
+						{
+							"arn_service":   "acs:ram::1234567890:role/acr-test",
+							"arn_user":      "acs:ram::1234567890:role/acr-test-user",
+							"domain":        []string{fmt.Sprintf("registry.%s.cr.aliyuncs.com", defaultRegionToTest)},
+							"instance_id":   "acr-1",
+							"instance_name": "acr_test_name",
+							"region_id":     defaultRegionToTest,
+						},
+					},
+					"image_registry_credential": []map[string]interface{}{
+						{
+							"server":    fmt.Sprintf("registry-vpc.%s.aliyuncs.com", defaultRegionToTest),
+							"user_name": name,
+							"password":  "tftestacc",
+						},
+					},
+					"depends_on ": []string{"alicloud_eip_address.default"},
+				}),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheck(map[string]string{
+						"image_cache_name":                   strings.ToLower(name),
+						"images.#":                           "1",
+						"acr_registry_info.#":                "1",
+						"acr_registry_info.0.instance_id":    "acr-1",
+						"acr_registry_info.0.arn_service":    "acs:ram::1234567890:role/acr-test",
+						"acr_registry_info.0.arn_user":       "acs:ram::1234567890:role/acr-test-user",
+						"image_registry_credential.#":        "1",
+						"image_registry_credential.0.server": fmt.Sprintf("registry-vpc.%s.aliyuncs.com", defaultRegionToTest),
 					}),
 				),
 			},
@@ -104,7 +170,7 @@ func TestAccAlicloudEciImageCache_basic(t *testing.T) {
 				ResourceName:            resourceId,
 				ImportState:             true,
 				ImportStateVerify:       true,
-				ImportStateVerifyIgnore: []string{"security_group_id", "vswitch_id", "resource_group_id", "eip_instance_id"},
+				ImportStateVerifyIgnore: []string{"security_group_id", "vswitch_id", "resource_group_id", "eip_instance_id", "image_cache_size", "retention_days", "zone_id", "elimination_strategy", "os_type", "insecure_registry", "plain_http_registry", "flash_copy_count", "standard_copy_count", "acr_registry_info", "image_registry_credential"},
 			},
 		},
 	})

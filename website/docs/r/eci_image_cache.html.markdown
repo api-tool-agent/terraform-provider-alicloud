@@ -79,12 +79,29 @@ The following arguments are supported:
 * `images` - (Required, ForceNew) The images to be cached. The image name must be versioned.
 * `security_group_id` - (Required, ForceNew) The ID of the security group. You do not need to specify the same security group as the container group.
 * `vswitch_id` - (Required, ForceNew) The ID of the VSwitch. You do not need to specify the same VSwitch as the container group.
+* `acr_registry_info` - (Optional, ForceNew) The information about the Container Registry (ACR) Enterprise Edition instances used to pull images without a password. See [`acr_registry_info`](#acr_registry_info) below.
+* `auto_match_image_cache` - (Optional, ForceNew) Specifies whether to enable the image cache auto match. Default to `false`.
 * `eip_instance_id` - (Optional, ForceNew) The instance ID of the Elastic IP Address (EIP). If you want to pull images from the Internet, you must specify an EIP to make sure that the container group can access the Internet. You can also configure the network address translation (NAT) gateway. We recommend that you configure the NAT gateway for the Internet access. Refer to [Public Network Access Method](https://help.aliyun.com/document_detail/99146.html)
+* `elimination_strategy` - (Optional, ForceNew) The elimination strategy of the image cache. Default to empty, which means the image cache is retained. Set the value to `LRU` to allow the image cache to be automatically deleted when the image cache quota is reached.
+* `flash` - (Optional, ForceNew) Specifies whether to enable the fast image cache feature. The fast image cache feature accelerates the creation of image caches. Default to `false`. Note: Using this feature generates a temporary local snapshot and the snapshot fast availability fee is charged.
+* `flash_copy_count` - (Optional, ForceNew) The number of local snapshot copies. We recommend that you add one snapshot copy for every 1000 ECI instances. When the fast image cache feature (`flash` is `true`) is enabled, a local snapshot is created first and deleted automatically after the normal snapshot is created.
 * `image_cache_size`   - (Optional, ForceNew) The size of the image cache. Default to `20`. Unit: GiB.
+* `insecure_registry` - (Optional, ForceNew) The address of the self-managed image repository. When you use an image in a self-managed repository that uses a self-signed certificate, you must configure this parameter to skip certificate authentication.
+* `os_type` - (Optional, ForceNew) The operating system of the container image. Valid values: `Linux`, `Windows`. Default to `Linux`. Note: `Windows` is in invitational preview. To use it, submit a ticket.
+* `plain_http_registry` - (Optional, ForceNew) The address of the self-managed image repository. When you use an image in a self-managed repository that uses the HTTP protocol, you must configure this parameter so that ECI pulls the image over HTTP.
 * `resource_group_id` - (Optional, ForceNew) The ID of the resource group.
 * `retention_days` - (Optional, ForceNew) The retention days of the image cache. Once the image cache expires, it will be cleared. By default, the image cache never expires. Note: The image cache that fails to be created is retained for only one day.
+* `standard_copy_count` - (Optional, ForceNew) The number of normal snapshot copies. We recommend that you add one snapshot copy for every 1000 ECI instances. When the fast image cache feature (`flash` is `false`) is not enabled, only normal snapshots are generated.
 * `zone_id` - (Optional, ForceNew) The zone id to cache image.
 * `image_registry_credential` - (Optional, ForceNew) The Image Registry parameters about the image to be cached. See [`image_registry_credential`](#image_registry_credential) below.
+
+### `acr_registry_info`
+* `arn_service` - (Optional) The ARN of the RAM role in the account to which the ECI resources belong. It is used to specify the RAM role for pulling ACR images without a password.
+* `arn_user` - (Optional) The ARN of the RAM role in the account to which the ACR instance belongs. It is used to pull ACR images across accounts without a password.
+* `domain` - (Optional) The domain names of the ACR Enterprise Edition instance. By default, all domain names of the instance are used. Separate multiple domain names with commas (,).
+* `instance_id` - (Optional) The ID of the ACR Enterprise Edition instance. This parameter is required when the ACR Enterprise Edition instance uses a custom domain name.
+* `instance_name` - (Optional) The name of the ACR Enterprise Edition instance.
+* `region_id` - (Optional) The region ID of the ACR Enterprise Edition instance. You need to specify this parameter when the ACR Enterprise Edition instance and the ECI resources are in different regions.
 
 ### `image_registry_credential`
 * `server` - (Optional) The address of Image Registry without `http://` or `https://`.

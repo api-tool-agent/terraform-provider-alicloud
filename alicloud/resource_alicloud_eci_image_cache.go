@@ -1,10 +1,13 @@
 package alicloud
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/responses"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/eci"
 	"github.com/aliyun/terraform-provider-alicloud/alicloud/connectivity"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -22,12 +25,68 @@ func resourceAlicloudEciImageCache() *schema.Resource {
 			Create: schema.DefaultTimeout(60 * time.Minute),
 		},
 		Schema: map[string]*schema.Schema{
+			"acr_registry_info": {
+				Type:     schema.TypeSet,
+				Optional: true,
+				ForceNew: true,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"arn_service": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"arn_user": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"domain": {
+							Type:     schema.TypeSet,
+							Optional: true,
+							Elem: &schema.Schema{
+								Type: schema.TypeString,
+							},
+						},
+						"instance_id": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"instance_name": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"region_id": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+					},
+				},
+			},
+			"auto_match_image_cache": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				ForceNew: true,
+			},
 			"container_group_id": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
 			"eip_instance_id": {
 				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
+			"elimination_strategy": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
+			"flash": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				ForceNew: true,
+			},
+			"flash_copy_count": {
+				Type:     schema.TypeInt,
 				Optional: true,
 				ForceNew: true,
 			},
@@ -70,6 +129,22 @@ func resourceAlicloudEciImageCache() *schema.Resource {
 				},
 				ForceNew: true,
 			},
+			"insecure_registry": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
+			"os_type": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				ForceNew:     true,
+				ValidateFunc: StringInSlice([]string{"Linux", "Windows"}, false),
+			},
+			"plain_http_registry": {
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 			"resource_group_id": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -83,6 +158,11 @@ func resourceAlicloudEciImageCache() *schema.Resource {
 			"security_group_id": {
 				Type:     schema.TypeString,
 				Required: true,
+				ForceNew: true,
+			},
+			"standard_copy_count": {
+				Type:     schema.TypeInt,
+				Optional: true,
 				ForceNew: true,
 			},
 			"status": {
@@ -107,52 +187,111 @@ func resourceAlicloudEciImageCacheCreate(d *schema.ResourceData, meta interface{
 	client := meta.(*connectivity.AliyunClient)
 	eciService := EciService{client}
 
-	request := eci.CreateCreateImageCacheRequest()
-	if v, ok := d.GetOk("eip_instance_id"); ok {
-		request.EipInstanceId = v.(string)
+	request, err := client.NewCommonRequest("Eci", "Eci", strings.ToUpper(string(Https)), connectivity.ApiVersion("2018-08-08"))
+	if err != nil {
+		return WrapError(err)
 	}
-	request.ImageCacheName = d.Get("image_cache_name").(string)
+	request.ApiName = "CreateImageCache"
+	request.QueryParams["RegionId"] = client.RegionId
+	request.QueryParams["ImageCacheName"] = d.Get("image_cache_name").(string)
+	request.QueryParams["SecurityGroupId"] = d.Get("security_group_id").(string)
+	request.QueryParams["VSwitchId"] = d.Get("vswitch_id").(string)
+	if v, ok := d.GetOk("eip_instance_id"); ok {
+		request.QueryParams["EipInstanceId"] = v.(string)
+	}
 	if v, ok := d.GetOk("image_cache_size"); ok {
-		request.ImageCacheSize = requests.NewInteger(v.(int))
+		request.QueryParams["ImageCacheSize"] = strconv.Itoa(v.(int))
 	}
 	if v, ok := d.GetOk("image_registry_credential"); ok {
-		imageRegistryCredential := []eci.CreateImageCacheImageRegistryCredential{}
-		for _, e := range v.(*schema.Set).List() {
-			password := e.(map[string]interface{})["password"]
-			server := e.(map[string]interface{})["server"]
-			userName := e.(map[string]interface{})["user_name"]
-			imageRegistryCredential = append(imageRegistryCredential, eci.CreateImageCacheImageRegistryCredential{
-				Password: password.(string),
-				Server:   server.(string),
-				UserName: userName.(string),
-			})
+		for i, e := range v.(*schema.Set).List() {
+			credential := e.(map[string]interface{})
+			index := strconv.Itoa(i + 1)
+			if password, ok := credential["password"]; ok && password.(string) != "" {
+				request.QueryParams["ImageRegistryCredential."+index+".Password"] = password.(string)
+			}
+			if server, ok := credential["server"]; ok && server.(string) != "" {
+				request.QueryParams["ImageRegistryCredential."+index+".Server"] = server.(string)
+			}
+			if userName, ok := credential["user_name"]; ok && userName.(string) != "" {
+				request.QueryParams["ImageRegistryCredential."+index+".UserName"] = userName.(string)
+			}
 		}
-		request.ImageRegistryCredential = &imageRegistryCredential
 	}
-	image := expandStringList(d.Get("images").(*schema.Set).List())
-	request.Image = image
-	request.RegionId = client.RegionId
+	for i, image := range expandStringList(d.Get("images").(*schema.Set).List()) {
+		request.QueryParams["Image."+strconv.Itoa(i+1)] = image
+	}
+	if v, ok := d.GetOk("acr_registry_info"); ok {
+		for i, e := range v.(*schema.Set).List() {
+			registry := e.(map[string]interface{})
+			prefix := "AcrRegistryInfo." + strconv.Itoa(i+1)
+			for key, param := range map[string]string{
+				"arn_service":   "ArnService",
+				"arn_user":      "ArnUser",
+				"instance_id":   "InstanceId",
+				"instance_name": "InstanceName",
+				"region_id":     "RegionId",
+			} {
+				if value, ok := registry[key]; ok && value.(string) != "" {
+					request.QueryParams[prefix+"."+param] = value.(string)
+				}
+			}
+			if v, ok := registry["domain"]; ok {
+				for j, domain := range v.(*schema.Set).List() {
+					request.QueryParams[prefix+".Domain."+strconv.Itoa(j+1)] = domain.(string)
+				}
+			}
+		}
+	}
+	if v, ok := d.GetOkExists("auto_match_image_cache"); ok {
+		request.QueryParams["AutoMatchImageCache"] = strconv.FormatBool(v.(bool))
+	}
+	if v, ok := d.GetOkExists("flash"); ok {
+		request.QueryParams["Flash"] = strconv.FormatBool(v.(bool))
+	}
+	if v, ok := d.GetOk("flash_copy_count"); ok {
+		request.QueryParams["FlashCopyCount"] = strconv.Itoa(v.(int))
+	}
+	if v, ok := d.GetOk("standard_copy_count"); ok {
+		request.QueryParams["StandardCopyCount"] = strconv.Itoa(v.(int))
+	}
+	if v, ok := d.GetOk("elimination_strategy"); ok {
+		request.QueryParams["EliminationStrategy"] = v.(string)
+	}
+	if v, ok := d.GetOk("insecure_registry"); ok {
+		request.QueryParams["InsecureRegistry"] = v.(string)
+	}
+	if v, ok := d.GetOk("plain_http_registry"); ok {
+		request.QueryParams["PlainHttpRegistry"] = v.(string)
+	}
+	if v, ok := d.GetOk("os_type"); ok {
+		request.QueryParams["OsType"] = v.(string)
+	}
 	if v, ok := d.GetOk("resource_group_id"); ok {
-		request.ResourceGroupId = v.(string)
+		request.QueryParams["ResourceGroupId"] = v.(string)
 	}
 	if v, ok := d.GetOk("retention_days"); ok {
-		request.RetentionDays = requests.NewInteger(v.(int))
+		request.QueryParams["RetentionDays"] = strconv.Itoa(v.(int))
 	}
-	request.SecurityGroupId = d.Get("security_group_id").(string)
-	request.VSwitchId = d.Get("vswitch_id").(string)
 	if v, ok := d.GetOk("zone_id"); ok {
-		request.ZoneId = v.(string)
+		request.QueryParams["ZoneId"] = v.(string)
 	}
 
 	raw, err := client.WithEciClient(func(eciClient *eci.Client) (interface{}, error) {
-		return eciClient.CreateImageCache(request)
+		return eciClient.ProcessCommonRequest(request)
 	})
 	if err != nil {
 		return WrapErrorf(err, DefaultErrorMsg, "alicloud_eci_image_cache", request.GetActionName(), AlibabaCloudSdkGoERROR)
 	}
-	addDebug(request.GetActionName(), raw)
-	response, _ := raw.(*eci.CreateImageCacheResponse)
-	d.SetId(fmt.Sprintf("%v", response.ImageCacheId))
+	addDebug(request.GetActionName(), raw, request.Headers, request)
+	response, _ := raw.(*responses.CommonResponse)
+	var object map[string]interface{}
+	if err := json.Unmarshal(response.GetHttpContentBytes(), &object); err != nil {
+		return WrapErrorf(err, DefaultErrorMsg, "alicloud_eci_image_cache", request.GetActionName(), AlibabaCloudSdkGoERROR)
+	}
+	if _, ok := object["ImageCacheId"]; !ok {
+		return WrapErrorf(fmt.Errorf("missing ImageCacheId in CreateImageCache response"), DefaultErrorMsg, "alicloud_eci_image_cache", request.GetActionName(), AlibabaCloudSdkGoERROR)
+	}
+	d.SetId(fmt.Sprint(object["ImageCacheId"]))
 	stateConf := BuildStateConf([]string{"Preparing", "Creating"}, []string{"Ready"}, d.Timeout(schema.TimeoutCreate), 10*time.Second, eciService.EciImageCacheStateRefreshFunc(d.Id(), []string{"Failed"}))
 	if _, err := stateConf.WaitForState(); err != nil {
 		return WrapErrorf(err, IdMsg, d.Id())
