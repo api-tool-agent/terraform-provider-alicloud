@@ -7056,3 +7056,46 @@ func TestAccAliCloudECSInstanceAdditionalAttributes(t *testing.T) {
 		},
 	})
 }
+
+func TestUnitAliCloudInstanceDiskCategoryXc(t *testing.T) {
+	instanceResource := resourceAliCloudInstance()
+
+	systemDiskCategory, ok := instanceResource.Schema["system_disk_category"]
+	if !ok {
+		t.Fatal("system_disk_category is not part of the instance schema")
+	}
+	dataDisks, ok := instanceResource.Schema["data_disks"]
+	if !ok {
+		t.Fatal("data_disks is not part of the instance schema")
+	}
+	dataDiskCategory := dataDisks.Elem.(*schema.Resource).Schema["category"]
+
+	validate := func(name string, schemaField *schema.Schema, value string) {
+		if schemaField.ValidateFunc == nil {
+			t.Fatalf("%s has no validation function", name)
+		}
+		if _, errs := schemaField.ValidateFunc(value, name); len(errs) > 0 {
+			t.Fatalf("%s rejects %q: %v", name, value, errs)
+		}
+	}
+	reject := func(name string, schemaField *schema.Schema, value string) {
+		if _, errs := schemaField.ValidateFunc(value, name); len(errs) == 0 {
+			t.Fatalf("%s unexpectedly accepts %q", name, value)
+		}
+	}
+
+	for _, value := range []string{"cloud_essd_xc0", "cloud_essd_xc1"} {
+		validate("system_disk_category", systemDiskCategory, value)
+		validate("data_disks.category", dataDiskCategory, value)
+	}
+	reject("system_disk_category", systemDiskCategory, "cloud_essd_xc2")
+	reject("data_disks.category", dataDiskCategory, "cloud_essd_xc2")
+
+	// ecs.c9h instance types need no dedicated enum: instance_type only validates the "ecs." prefix.
+	instanceType, ok := instanceResource.Schema["instance_type"]
+	if !ok {
+		t.Fatal("instance_type is not part of the instance schema")
+	}
+	validate("instance_type", instanceType, "ecs.c9h.large")
+	reject("instance_type", instanceType, "c9h.large")
+}

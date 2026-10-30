@@ -24,6 +24,14 @@ Provides a ECS instance resource.
 </div></div>
 
 ```terraform
+terraform {
+  required_providers {
+    alicloud = {
+      source = "aliyun/alicloud"
+    }
+  }
+}
+
 variable "name" {
   default = "terraform-example"
 }
@@ -85,7 +93,7 @@ resource "alicloud_instance" "instance" {
   data_disks {
     name        = "disk2"
     size        = 20
-    category    = "cloud_efficiency"
+    category    = "cloud_essd"
     description = "disk2"
     encrypted   = true
     kms_key_id  = alicloud_kms_key.key.id
@@ -122,7 +130,7 @@ The following arguments are supported:
 
 * `availability_zone` - (Optional, ForceNew) The Zone to start the instance in. It is ignored and will be computed when set `vswitch_id`.
 * `instance_name` - (Optional) The name of the ECS. This instance_name can have a string of 2 to 128 characters, must contain only alphanumeric characters or hyphens, such as "-",".","_", and must not begin with a hyphen, and must not begin with http:// or https://. **NOTE:** From version 1.243.0, the default value `ECS-Instance` will be removed.
-* `system_disk_category` - (Optional, ForceNew) Valid values are `ephemeral_ssd`, `cloud_efficiency`, `cloud_ssd`, `cloud_essd`, `cloud`, `cloud_auto`, `cloud_essd_entry`. only is used to some none I/O optimized instance. Valid values `cloud_auto` Available since v1.184.0.
+* `system_disk_category` - (Optional, ForceNew) Valid values are `ephemeral_ssd`, `cloud_efficiency`, `cloud_ssd`, `cloud_essd`, `cloud`, `cloud_auto`, `cloud_essd_entry`, `cloud_essd_xc0`, `cloud_essd_xc1`. only is used to some none I/O optimized instance. Valid values `cloud_auto` Available since v1.184.0. Valid values `cloud_essd_xc0` and `cloud_essd_xc1` Available since v2.2.0.
 * `system_disk_name` - (Optional, Available since v1.101.0) The name of the system disk. The name must be 2 to 128 characters in length and can contain letters, digits, periods (.), colons (:), underscores (_), and hyphens (-). It must start with a letter and cannot start with http:// or https://.
 * `system_disk_description` - (Optional, Available since v1.101.0) The description of the system disk. The description must be 2 to 256 characters in length and cannot start with http:// or https://.
 * `system_disk_size` - (Optional) Size of the system disk, measured in GiB. Value range: [20, 500]. The specified value must be equal to or greater than max{20, Imagesize}. Default value: max{40, ImageSize}.
@@ -325,6 +333,8 @@ The data_disks supports the following:
   - `cloud_regional_disk_auto` (Available since v1.274.0) : The Regional ESSD.
   - `elastic_ephemeral_disk_standard` (Available since v1.274.0) : The standard elastic ephemeral disk.
   - `elastic_ephemeral_disk_premium` (Available since v1.274.0) : The premium elastic ephemeral disk.
+  - `cloud_essd_xc0` (Available since v2.2.0) : The ESSD XC0 disk.
+  - `cloud_essd_xc1` (Available since v2.2.0) : The ESSD XC1 disk.
 * `performance_level` - (Optional, ForceNew) The performance level of the ESSD used as data disk:
   - `PL0`: A single ESSD can deliver up to 10,000 random read/write IOPS.
   - `PL1`: A single ESSD can deliver up to 50,000 random read/write IOPS.
